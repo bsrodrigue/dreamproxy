@@ -1,6 +1,7 @@
 package main
 
 import (
+	"dreamproxy/http_parser"
 	"errors"
 	"fmt"
 	"io"
@@ -61,9 +62,18 @@ func handleConn(c net.Conn) {
 
 		request_str := string(request_buffer)
 
-		for line := range strings.SplitSeq(request_str, "\n") {
-			log.Println(line)
+		line := strings.Split(request_str, "\n")[0]
+
+		http_req, err := http_parser.ParseRawHttp(line)
+
+		if err != nil {
+			log.Println(err)
+			return
 		}
+
+		log.Println(http_req.Method)
+		log.Println(http_req.Target)
+		log.Println(http_req.Version)
 
 		response_buffer := []byte("Hello")
 		c.Write(response_buffer)

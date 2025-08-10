@@ -3,7 +3,6 @@ package http_parser
 import (
 	"fmt"
 	"slices"
-	"strconv"
 	"strings"
 )
 
@@ -25,20 +24,20 @@ type HttpReq struct {
 	Body    []byte
 }
 
-func ParseRawHttp(raw string) (HttpReq, error) {
-	if raw == "" {
+func ParseRawHttp(raw_http string) (HttpReq, error) {
+	if raw_http == "" {
 		return HttpReq{}, fmt.Errorf("Empty HTTP Request")
 	}
 
-	raw_portions := strings.Split(raw, " ")
+	raw_parts := strings.Split(raw_http, " ")
 
-	if len(raw_portions) < 3 {
+	if len(raw_parts) < 3 {
 		return HttpReq{}, fmt.Errorf("Missing portions in first line")
 	}
 
-	raw_method := raw_portions[0]
-	raw_target := raw_portions[1]
-	raw_version := raw_portions[2]
+	raw_method := strings.TrimSpace(raw_parts[0])
+	raw_target := strings.TrimSpace(raw_parts[1])
+	raw_version := strings.TrimSpace(raw_parts[2])
 
 	if !slices.Contains(http_methods, raw_method) {
 		return HttpReq{}, fmt.Errorf("Invalid HTTP method")
@@ -46,6 +45,10 @@ func ParseRawHttp(raw string) (HttpReq, error) {
 
 	if !strings.HasPrefix(raw_target, "/") {
 		return HttpReq{}, fmt.Errorf("Invalid HTTP target")
+	}
+
+	if !strings.HasPrefix(raw_version, "HTTP/") {
+		return HttpReq{}, fmt.Errorf("Invalid HTTP version")
 	}
 
 	version_split := strings.Split(raw_version, "/")
@@ -56,10 +59,8 @@ func ParseRawHttp(raw string) (HttpReq, error) {
 
 	version_number := version_split[1]
 
-	_, err := strconv.ParseFloat(version_number, 64)
-
-	if err != nil {
-		return HttpReq{}, fmt.Errorf("Invalid HTTP version: Expected float")
+	if !isValidHTTPVersion(version_number) {
+		return HttpReq{}, fmt.Errorf("Invalid HTTP version:%s", version_number)
 	}
 
 	return HttpReq{
@@ -67,4 +68,17 @@ func ParseRawHttp(raw string) (HttpReq, error) {
 		Target:  raw_target,
 		Version: version_number,
 	}, nil
+}
+
+func isValidHTTPVersion(version string) bool {
+	validVersions := map[string]bool{
+		"0.9": true,
+		"1.0": true,
+		"1.1": true,
+		"2":   true,
+		"2.0": true,
+		"3":   true,
+		"3.0": true,
+	}
+	return validVersions[version]
 }
