@@ -7,11 +7,31 @@ import (
 	"io"
 	"log"
 	"net"
+	"os"
 	"strings"
 )
 
 const PROTOCOL string = "tcp4"
 const PORT string = "8080"
+
+func LoadFile(filepath string) ([]byte, error) {
+	index_file, err := os.Open(filepath)
+
+	if err != nil {
+		log.Println(err)
+		return []byte{}, err
+	}
+
+	index_content, err := io.ReadAll(index_file)
+
+	if err != nil {
+		return []byte{}, err
+	}
+
+	defer index_file.Close()
+
+	return index_content, err
+}
 
 func main() {
 	ln, err := net.Listen(PROTOCOL, fmt.Sprintf(":%s", PORT))
@@ -20,7 +40,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	log.Println(fmt.Sprintf("Listening on :%s", PORT))
+	log.Printf("%s", fmt.Sprintf("listening on :%s", PORT))
 
 	defer ln.Close()
 
@@ -60,23 +80,48 @@ func handleConn(c net.Conn) {
 			return
 		}
 
-		request_str := string(request_buffer)
+		request_str := string(request_buffer[:n])
 
-		line := strings.Split(request_str, "\n")[0]
+		// Currently only supports a single line
+		http_req, err := http_parser.ParseRawHttp(request_str)
 
-		http_req, err := http_parser.ParseRawHttp(line)
+		for key, val := range http_req.Headers {
+			log.Println(key, ":", val)
+		}
 
 		if err != nil {
 			log.Println(err)
 			return
 		}
 
-		log.Println(http_req.Method)
-		log.Println(http_req.Target)
-		log.Println(http_req.Version)
+		target := http_req.Target
 
-		response_buffer := []byte("Hello")
-		c.Write(response_buffer)
+		if target == "/" {
+			target = "index"
+		} else {
+			target = strings.Split(target, "/")[1]
+		}
+
+		index_content, err := LoadFile(fmt.Sprintf("%s.html", target))
+
+		if err != nil {
+			log.Println(err)
+			return
+		}
+
+		body := string(index_content)
+
+		response_str := fmt.Sprintf(
+			"HTTP/1.1 200 OK\r\n"+
+				"Server: dreamserver/0.0.1 (Archlinux)\r\n"+
+				"Content-Length: %d\r\n"+
+				"Content-Type: text/html; charset=utf-8\r\n"+
+				"Connection: close\r\n\r\n"+
+				"%s",
+			len(body), body,
+		)
+
+		c.Write([]byte(response_str))
 	}
 
 }
