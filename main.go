@@ -82,12 +82,7 @@ func handleConn(c net.Conn) {
 
 		request_str := string(request_buffer[:n])
 
-		// Currently only supports a single line
 		http_req, err := http_parser.ParseRawHttp(request_str)
-
-		for key, val := range http_req.Headers {
-			log.Println(key, ":", val)
-		}
 
 		if err != nil {
 			log.Println(err)
@@ -95,6 +90,18 @@ func handleConn(c net.Conn) {
 		}
 
 		target := http_req.Target
+		var res http_parser.HttpRes
+
+		//TODO: Handle HTTP/0.9
+		if http_req.Version == "0.9" {
+		} else {
+		}
+
+		res = http_parser.HttpRes{
+			Version:     http_parser.V0_9,
+			ContentType: "text/html; charset=utf-8",
+			Connection:  "close",
+		}
 
 		if target == "/" {
 			target = "index"
@@ -106,22 +113,14 @@ func handleConn(c net.Conn) {
 
 		if err != nil {
 			log.Println(err)
-			return
+			res.Status = http_parser.StatusNotFound
+			res.Body = []byte("")
+		} else {
+			res.Status = http_parser.StatusOK
+			res.Body = index_content
 		}
 
-		body := string(index_content)
-
-		response_str := fmt.Sprintf(
-			"HTTP/1.1 200 OK\r\n"+
-				"Server: dreamserver/0.0.1 (Archlinux)\r\n"+
-				"Content-Length: %d\r\n"+
-				"Content-Type: text/html; charset=utf-8\r\n"+
-				"Connection: close\r\n\r\n"+
-				"%s",
-			len(body), body,
-		)
-
-		c.Write([]byte(response_str))
+		c.Write([]byte(res.ToStr()))
 	}
 
 }
