@@ -1,37 +1,22 @@
 package main
 
 import (
-	"dreamproxy/http_parser"
+	"dreamproxy/file_system"
+	http_common "dreamproxy/http/common"
+	"dreamproxy/http/parser"
+	"dreamproxy/mime"
 	"errors"
 	"fmt"
 	"io"
 	"log"
 	"net"
-	"os"
-	"strings"
+	"net/url"
+	"path"
 )
 
 const PROTOCOL string = "tcp4"
 const PORT string = "8080"
-
-func LoadFile(filepath string) ([]byte, error) {
-	index_file, err := os.Open(filepath)
-
-	if err != nil {
-		log.Println(err)
-		return []byte{}, err
-	}
-
-	index_content, err := io.ReadAll(index_file)
-
-	if err != nil {
-		return []byte{}, err
-	}
-
-	defer index_file.Close()
-
-	return index_content, err
-}
+const ROOT_FS string = "staticfiles"
 
 func main() {
 	ln, err := net.Listen(PROTOCOL, fmt.Sprintf(":%s", PORT))
@@ -40,9 +25,9 @@ func main() {
 		log.Fatal(err)
 	}
 
-	log.Printf("%s", fmt.Sprintf("listening on :%s", PORT))
-
 	defer ln.Close()
+
+	log.Printf("%s", fmt.Sprintf("listening on :%s", PORT))
 
 	for {
 		conn, err := ln.Accept()
@@ -60,67 +45,116 @@ func handleConn(c net.Conn) {
 	// Parse HTTP header here to know whether to keep connection alive
 	defer c.Close()
 
-	request_buffer := make([]byte, 1024)
-
 	for {
-		n, err := c.Read(request_buffer)
-
-		if err != nil {
-			if errors.Is(err, io.EOF) || errors.Is(err, net.ErrClosed) {
-				log.Println("Client disconnected:", c.RemoteAddr())
-				return
-
-			}
-			log.Println(err)
-			return
-		}
-
-		if n <= 0 {
-			log.Println("No data transmitted")
-			return
-		}
-
-		request_str := string(request_buffer[:n])
-
-		http_req, err := http_parser.ParseRawHttp(request_str)
+		req_raw, err := exctractRequest(c)
 
 		if err != nil {
 			log.Println(err)
 			return
 		}
 
-		target := http_req.Target
-		var res http_parser.HttpRes
-
-		//TODO: Handle HTTP/0.9
-		if http_req.Version == "0.9" {
-		} else {
-		}
-
-		res = http_parser.HttpRes{
-			Version:     http_parser.V0_9,
-			ContentType: "text/html; charset=utf-8",
-			Connection:  "close",
-		}
-
-		if target == "/" {
-			target = "index"
-		} else {
-			target = strings.Split(target, "/")[1]
-		}
-
-		index_content, err := LoadFile(fmt.Sprintf("%s.html", target))
+		req, err := http_parser.ParseRawHttp(req_raw)
 
 		if err != nil {
 			log.Println(err)
-			res.Status = http_parser.StatusNotFound
-			res.Body = []byte("")
-		} else {
-			res.Status = http_parser.StatusOK
-			res.Body = index_content
+			return
+		}
+
+		res, err := handleRequest(req)
+
+		if err != nil {
+			log.Println(err)
+			return
 		}
 
 		c.Write([]byte(res.ToStr()))
 	}
+}
 
+func handleRequest(req http_common.HttpReq) (http_common.HttpRes, error) {
+	var res http_common.HttpRes
+	var res_body = []byte("")
+	var file_path = string("")
+	target := req.Target
+
+	// Prepare Response
+	req_connection := req.Headers["Connection"]
+	res = http_common.HttpRes{
+		Version:    http_common.V0_9,
+		Connection: req_connection,
+	}
+
+	host := req.Headers["Host"]
+	scheme := req.Scheme
+	target_path, err := url.Parse(scheme + "://" + host + target)
+
+	if err != nil {
+		log.Println(err)
+	}
+
+	target_path.Path = path.Clean(target_path.Path)
+	ext := path.Ext(target_path.Path)
+
+	// Page URLs
+	if ext == "" {
+		res.ContentType = mime.MimeTypes[".html"]
+		file_path = path.Join(ROOT_FS, target_path.Path)
+
+		// Is Root
+		if target_path.Path == "/" {
+			file_path = path.Join(ROOT_FS, "index.html")
+		}
+
+		res_body, err = file_system.LoadFile(file_path)
+
+	} else { // Resource URLs
+		res.ContentType = mime.MimeTypes[ext]
+		if res.ContentType == "" {
+			res.ContentType = "application/octet-stream"
+		}
+		file_path = path.Join(ROOT_FS, target_path.Path)
+		res_body, err = file_system.LoadFile(file_path)
+	}
+
+	if err != nil {
+		log.Println(err)
+		not_found_page, err := file_system.LoadFile(path.Join(ROOT_FS, "not_found.html"))
+
+		if err != nil {
+			log.Println(err)
+			not_found_page = []byte("<h1>404 Not Found</h1>")
+		}
+
+		res.Status = http_common.StatusNotFound
+		res.Body = []byte(not_found_page)
+	} else {
+		res.Status = http_common.StatusOK
+		res.Body = res_body
+	}
+
+	return res, err
+}
+
+func exctractRequest(c net.Conn) (string, error) {
+	// Implement proper HTTP reading (read till /r/n/r/n)
+	request_buffer := make([]byte, 1024)
+	n, err := c.Read(request_buffer)
+
+	if err != nil {
+		if errors.Is(err, io.EOF) {
+			return "", err
+		} else if errors.Is(err, net.ErrClosed) {
+			log.Println("Client disconnected:", c.RemoteAddr())
+			return "", err
+		}
+	}
+
+	if n <= 0 {
+		log.Println("No data transmitted")
+		return "", err
+	}
+
+	req_raw := string(request_buffer[:n])
+
+	return req_raw, err
 }

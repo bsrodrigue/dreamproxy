@@ -1,6 +1,7 @@
 package http_parser
 
 import (
+	http_common "dreamproxy/http/common"
 	"strings"
 	"testing"
 )
@@ -16,7 +17,7 @@ func TestErrorWhenEmptyRequest(t *testing.T) {
 }
 
 func TestErrorWhenFirstLineHasNotThreePortions(t *testing.T) {
-	raw_http := ""
+	raw_http := "GET /foo"
 
 	_, err := ParseRawHttp(raw_http)
 
@@ -47,7 +48,7 @@ func TestErrorWhenVersionInvalid(t *testing.T) {
 }
 
 func TestParseHttpMethod(t *testing.T) {
-	for _, method := range http_methods {
+	for _, method := range http_common.HTTP_METHODS {
 		raw_http := method + " / HTTP/1.1"
 
 		parsed_http, _ := ParseRawHttp(raw_http)

@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>404 - Page Not Found | DreamServer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+            background: linear-gradient(45deg, #111827, #1f2937, #111827);
+            background-size: 200% 200%;
+            animation: gradientShift 20s ease infinite;
+            color: #e5e7eb;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 1rem;
+        }
+
+        @keyframes gradientShift {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        .container {
+            max-width: 600px;
+            animation: fadeInUp 1s ease-out;
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            font-size: 2rem;
+            font-weight: bold;
+            color: #0ea5e9;
+            margin-bottom: 3rem;
+        }
+
+        .rocket {
+            font-size: 2.5rem;
+            animation: float 3s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+        }
+
+        .error-code {
+            font-size: 8rem;
+            font-weight: bold;
+            color: #0ea5e9;
+            line-height: 1;
+            margin-bottom: 1rem;
+            text-shadow: 0 0 30px rgba(14, 165, 233, 0.3);
+            animation: glow 2s ease-in-out infinite alternate;
+        }
+
+        @keyframes glow {
+            from { text-shadow: 0 0 30px rgba(14, 165, 233, 0.3); }
+            to { text-shadow: 0 0 40px rgba(14, 165, 233, 0.6); }
+        }
+
+        .error-title {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: #ffffff;
+            margin-bottom: 1rem;
+        }
+
+        .error-message {
+            font-size: 1.2rem;
+            color: #d1d5db;
+            margin-bottom: 3rem;
+            line-height: 1.6;
+        }
+
+        .buttons {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            text-decoration: none;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            display: inline-block;
+        }
+
+        .btn-primary {
+            background-color: #0ea5e9;
+            color: #111827;
+        }
+
+        .btn-primary:hover {
+            background-color: #0284c7;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3);
+        }
+
+        .btn-secondary {
+            background-color: rgba(55, 65, 81, 0.8);
+            color: #e5e7eb;
+            border: 1px solid #4b5563;
+        }
+
+        .btn-secondary:hover {
+            background-color: rgba(75, 85, 99, 0.8);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        .error-details {
+            margin-top: 3rem;
+            padding: 1.5rem;
+            background-color: rgba(31, 41, 55, 0.5);
+            border-radius: 0.75rem;
+            border-left: 4px solid #0ea5e9;
+        }
+
+        .error-details h3 {
+            color: #0ea5e9;
+            font-size: 1.1rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .error-details p {
+            color: #9ca3af;
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            background-color: #ef4444;
+            border-radius: 50%;
+            margin-right: 0.5rem;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        @media (max-width: 640px) {
+            .error-code {
+                font-size: 6rem;
+            }
+            
+            .error-title {
+                font-size: 2rem;
+            }
+            
+            .error-message {
+                font-size: 1rem;
+            }
+            
+            .buttons {
+                flex-direction: column;
+            }
+            
+            .btn {
+                width: 100%;
+            }
+        }
+
+        .floating-elements {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        .floating-element {
+            position: absolute;
+            color: rgba(14, 165, 233, 0.1);
+            font-size: 1.5rem;
+            animation: floatRandom 15s linear infinite;
+        }
+
+        .floating-element:nth-child(1) {
+            top: 20%;
+            left: 10%;
+            animation-delay: -2s;
+        }
+
+        .floating-element:nth-child(2) {
+            top: 60%;
+            right: 15%;
+            animation-delay: -8s;
+        }
+
+        .floating-element:nth-child(3) {
+            bottom: 30%;
+            left: 20%;
+            animation-delay: -5s;
+        }
+
+        .floating-element:nth-child(4) {
+            top: 40%;
+            right: 25%;
+            animation-delay: -12s;
+        }
+
+        @keyframes floatRandom {
+            0% { transform: translateY(0px) rotate(0deg); }
+            25% { transform: translateY(-20px) rotate(90deg); }
+            50% { transform: translateY(0px) rotate(180deg); }
+            75% { transform: translateY(-15px) rotate(270deg); }
+            100% { transform: translateY(0px) rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="floating-elements">
+        <div class="floating-element">404</div>
+        <div class="floating-element">HTTP</div>
+        <div class="floating-element">🚀</div>
+        <div class="floating-element">ERROR</div>
+    </div>
+
+    <div class="container">
+        <div class="logo">
+            <span class="rocket">🚀</span>
+            DreamServer
+        </div>
+        
+        <div class="error-code">404</div>
+        
+        <h1 class="error-title">Page Not Found</h1>
+        
+        <p class="error-message">
+            The requested resource could not be found on this server. 
+            It might have been moved, deleted, or you entered the wrong URL.
+        </p>
+        
+        <div class="buttons">
+            <a href="/" class="btn btn-primary">Go Home</a>
+            <a href="javascript:history.back()" class="btn btn-secondary">Go Back</a>
+        </div>
+        
+        <div class="error-details">
+            <h3><span class="status-indicator"></span>Error Details</h3>
+            <p>
+                <strong>Status Code:</strong> 404 Not Found<br>
+                <strong>Server:</strong> DreamServer/1.0<br>
+                <strong>Timestamp:</strong> <span id="timestamp"></span>
+            </p>
+        </div>
+    </div>
+
+    <script>
+        // Update timestamp
+        document.getElementById('timestamp').textContent = new Date().toISOString();
+        
+        // Add some interactive behavior
+        document.addEventListener('mousemove', (e) => {
+            const errorCode = document.querySelector('.error-code');
+            const rect = errorCode.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+            
+            const deltaX = (e.clientX - centerX) / 50;
+            const deltaY = (e.clientY - centerY) / 50;
+            
+            errorCode.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+        });
+        
+        // Reset position when mouse leaves
+        document.addEventListener('mouseleave', () => {
+            const errorCode = document.querySelector('.error-code');
+            errorCode.style.transform = 'translate(0px, 0px)';
+        });
+    </script>
+</body>
+</html>
