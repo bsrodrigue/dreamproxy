@@ -9,7 +9,7 @@ import (
 func TestErrorWhenEmptyRequest(t *testing.T) {
 	raw_http := ""
 
-	_, err := ParseRawHttp(raw_http)
+	_, err := ParseRawHttpReq(raw_http)
 
 	if err == nil {
 		t.Errorf("Passing empty http request must return error")
@@ -19,7 +19,7 @@ func TestErrorWhenEmptyRequest(t *testing.T) {
 func TestErrorWhenFirstLineHasNotThreePortions(t *testing.T) {
 	raw_http := "GET /foo"
 
-	_, err := ParseRawHttp(raw_http)
+	_, err := ParseRawHttpReq(raw_http)
 
 	if err == nil {
 		t.Errorf("Request first line must have three portions: <method> <path> <http-version>")
@@ -29,7 +29,7 @@ func TestErrorWhenFirstLineHasNotThreePortions(t *testing.T) {
 func TestErrorWhenTargetInvalid(t *testing.T) {
 	raw_http := "GET foo HTTP/1.1"
 
-	_, err := ParseRawHttp(raw_http)
+	_, err := ParseRawHttpReq(raw_http)
 
 	if err == nil {
 		t.Errorf("Invalid HTTP target")
@@ -39,7 +39,7 @@ func TestErrorWhenTargetInvalid(t *testing.T) {
 func TestErrorWhenVersionInvalid(t *testing.T) {
 	raw_http := "GET /foo HTTP/blob"
 
-	_, err := ParseRawHttp(raw_http)
+	_, err := ParseRawHttpReq(raw_http)
 
 	if err == nil {
 		t.Errorf("Invalid HTTP version")
@@ -51,7 +51,7 @@ func TestParseHttpMethod(t *testing.T) {
 	for _, method := range http_common.HTTP_METHODS {
 		raw_http := method + " / HTTP/1.1"
 
-		parsed_http, _ := ParseRawHttp(raw_http)
+		parsed_http, _ := ParseRawHttpReq(raw_http)
 
 		if parsed_http.Method != method {
 			t.Errorf("parsed_http.Method = %s; want %s", parsed_http.Method, method)
@@ -63,7 +63,7 @@ func TestParseHttpTarget(t *testing.T) {
 	for _, target := range http_targets {
 		raw_http := "GET " + target + " HTTP/1.1"
 
-		parsed_http, _ := ParseRawHttp(raw_http)
+		parsed_http, _ := ParseRawHttpReq(raw_http)
 
 		if parsed_http.Target != target {
 			t.Errorf("parsed_http.Target = %s; want %s", parsed_http.Target, target)
@@ -75,7 +75,7 @@ func TestParseHttpVersion(t *testing.T) {
 	for _, version := range http_versions {
 		raw_http := "GET / " + version
 
-		parsed_http, _ := ParseRawHttp(raw_http)
+		parsed_http, _ := ParseRawHttpReq(raw_http)
 
 		version_number := strings.Split(version, "/")[1]
 

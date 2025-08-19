@@ -26,12 +26,17 @@ var HTTP_METHODS = []string{
 }
 
 type HttpReq struct {
+	// Request Line Informations
 	Scheme  string
 	Method  string
 	Target  string
 	Version string
+
+	// Request Headers
 	Headers map[string]string
-	Body    []byte
+
+	// Request Body
+	Body []byte
 }
 
 func (req *HttpReq) ToStr() string {
@@ -57,7 +62,7 @@ func (req *HttpReq) ToStr() string {
 		sb.WriteString("\r\n")
 	}
 
-	sb.WriteString("\r\n")
+	sb.WriteString("\r\n\r\n")
 
 	// Body
 	sb.Write(req.Body)
@@ -66,18 +71,25 @@ func (req *HttpReq) ToStr() string {
 }
 
 type HttpRes struct {
-	Version       HttpVersion
-	Status        StatusCode
+	// Status Line Informations
+	Version HttpVersion
+	Status  StatusCode
+
+	// Response Headers
 	Server        string
 	ContentLength int
 	ContentType   string
 	Connection    string
 	Headers       map[string]string
-	Body          []byte
+
+	// Response Body
+	Body []byte
 }
 
 func (res *HttpRes) ToStr() string {
 	var sb strings.Builder
+
+	res.Headers["Server"] = "dreamserver/0.0.1 (Archlinux)"
 
 	// Pre-allocate roughly enough space
 	sb.Grow(1024 + len(res.Body))
@@ -92,16 +104,6 @@ func (res *HttpRes) ToStr() string {
 	sb.WriteString("\r\n")
 
 	// Headers
-	sb.WriteString("Server: dreamserver/0.0.1 (Archlinux)\r\n")
-	sb.WriteString("Content-Length: ")
-	sb.WriteString(strconv.Itoa(res.ContentLength))
-	sb.WriteString("\r\n")
-	sb.WriteString("Content-Type: ")
-	sb.WriteString(res.ContentType)
-	sb.WriteString("\r\n")
-	sb.WriteString("Connection: ")
-	sb.WriteString(res.Connection)
-
 	for key, value := range res.Headers {
 		sb.WriteString(key)
 		sb.WriteString(": ")
@@ -109,7 +111,7 @@ func (res *HttpRes) ToStr() string {
 		sb.WriteString("\r\n")
 	}
 
-	sb.WriteString("\r\n")
+	sb.WriteString("\r\n\r\n")
 
 	// Body
 	sb.Write(res.Body)

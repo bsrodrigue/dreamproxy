@@ -61,13 +61,15 @@ func handleConn(c net.Conn) {
 			return
 		}
 
-		req, err := http_parser.ParseRawHttp(req_raw.String())
+		req, err := http_parser.ParseRawHttpReq(req_raw.String())
 
 		if err != nil {
 			log.Println(err)
 			return
 		}
 
+		req.Headers["X-Forwarded-For"] = c.RemoteAddr().String()
+		req.Headers["Via"] = "HTTP/1.1 dreamserver"
 		res, err := handleRequest(req)
 
 		if err != nil {
@@ -130,7 +132,7 @@ func handleGet(target_url *url.URL, res *http_common.HttpRes) error {
 
 	// Page URLs
 	if ext == "" {
-		res.ContentType = mime.MimeTypes[".html"]
+		res.Headers["Content-Type"] = mime.MimeTypes[".html"]
 		file_path := path.Join(ROOT_FS, target_url.Path)
 
 		// Is Root
@@ -141,9 +143,10 @@ func handleGet(target_url *url.URL, res *http_common.HttpRes) error {
 		res_body, err = file_system.LoadFile(file_path)
 
 	} else { // Resource URLs
-		res.ContentType = mime.MimeTypes[ext]
+		res.Headers["Content-Type"] = mime.MimeTypes[ext]
+
 		if res.ContentType == "" {
-			res.ContentType = "application/octet-stream"
+			res.Headers["Content-Type"] = "application/octet-stream"
 		}
 		file_path := path.Join(ROOT_FS, target_url.Path)
 		res_body, err = file_system.LoadFile(file_path)
@@ -159,24 +162,30 @@ func handleGet(target_url *url.URL, res *http_common.HttpRes) error {
 		}
 
 		res.Status = http_common.StatusNotFound
+
+		res.Headers["Content-Length"] = fmt.Sprint(len(not_found_page))
+		res.Headers["Connection"] = "close"
+
 		res.Body = []byte(not_found_page)
-		res.ContentLength = len(not_found_page)
+
 	} else {
 		res.Status = http_common.StatusOK
+
+		res.Headers["Content-Length"] = fmt.Sprint(len(res.Body))
+
 		res.Body = res_body
-		res.ContentLength = len(res.Body)
 	}
 
 	return err
 }
 
-func handleRequest(req http_common.HttpReq) (http_common.HttpRes, error) {
-	var res http_common.HttpRes
+func handleRequest(req *http_common.HttpReq) (*http_common.HttpRes, error) {
+	var res *http_common.HttpRes
 	target := req.Target
 
 	// Prepare Response
 	req_connection := req.Headers["Connection"]
-	res = http_common.HttpRes{
+	res = &http_common.HttpRes{
 		Version:    http_common.V1_1,
 		Connection: req_connection,
 	}
@@ -204,56 +213,66 @@ func handleRequest(req http_common.HttpReq) (http_common.HttpRes, error) {
 		}
 
 		// Forward Request
-		server_conn.Write([]byte(req.ToStr()))
-	}
+		n, err := server_conn.Write([]byte(req.ToStr()))
 
-	switch method {
-	case "HEAD":
-		handleHead(target_url, &res)
-		break
-	case "GET":
-		handleGet(target_url, &res)
-		break
-	default:
-		log.Println("Invalid Method")
-		break
+		if err != nil {
+			log.Println("Bytes written: ", n)
+			log.Println("Error while forwarding request: ", err)
+		}
+
+		res_buf, err := extractRequest(server_conn)
+
+		if err != nil {
+			log.Println(err)
+		}
+
+		res, err = http_parser.ParseRawHttpRes(res_buf.String())
+
+	} else {
+		switch method {
+		case "HEAD":
+			handleHead(target_url, res)
+			break
+		case "GET":
+			handleGet(target_url, res)
+			break
+		default:
+			log.Println("Invalid Method")
+			break
+		}
 	}
 
 	return res, nil
 }
 
-func extractRequest(c net.Conn) (bytes.Buffer, error) {
-	//TODO: Extract this to ReadFull and WriteFull
+func extractRequest(c net.Conn) (*bytes.Buffer, error) {
 	tmp_buf := make([]byte, 1024)
 	var req_raw bytes.Buffer
 
 	for {
-		var n, err = c.Read(tmp_buf)
+		n, err := c.Read(tmp_buf)
 
 		if err != nil {
+			// End of File Reached
 			if errors.Is(err, io.EOF) {
-				return req_raw, err
+				return &req_raw, nil
 			} else if errors.Is(err, net.ErrClosed) {
 				log.Println("Client disconnected:", c.RemoteAddr())
-				return req_raw, err
+				return nil, err
+			} else {
+				log.Println("Error while reading client socket: ", err)
+				return nil, err
 			}
-		}
-
-		if n <= 0 {
-			log.Println("No data transmitted")
-			return req_raw, err
 		}
 
 		req_raw.Write(tmp_buf[:n])
 
-		is_header_end := strings.Contains(req_raw.String(), "\r\n\r\n")
-
-		if !is_header_end {
+		if bytes.Index(req_raw.Bytes(), []byte("\r\n\r\n")) == -1 {
 			continue
 		} else {
 			break
 		}
 	}
 
-	return req_raw, nil
+	return &req_raw, nil
 }
