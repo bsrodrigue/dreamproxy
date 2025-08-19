@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"dreamproxy/file_system"
 	http_common "dreamproxy/http/common"
 	"dreamproxy/http/parser"
@@ -10,8 +11,12 @@ import (
 	"io"
 	"log"
 	"net"
+	"net/http"
+	_ "net/http/pprof"
 	"net/url"
+	"os"
 	"path"
+	"strings"
 )
 
 const PROTOCOL string = "tcp4"
@@ -19,6 +24,9 @@ const PORT string = "8080"
 const ROOT_FS string = "staticfiles"
 
 func main() {
+	go func() {
+		log.Println(http.ListenAndServe("localhost:6060", nil))
+	}()
 	ln, err := net.Listen(PROTOCOL, fmt.Sprintf(":%s", PORT))
 
 	if err != nil {
@@ -46,14 +54,14 @@ func handleConn(c net.Conn) {
 	defer c.Close()
 
 	for {
-		req_raw, err := exctractRequest(c)
+		req_raw, err := extractRequest(c)
 
 		if err != nil {
 			log.Println(err)
 			return
 		}
 
-		req, err := http_parser.ParseRawHttp(req_raw)
+		req, err := http_parser.ParseRawHttp(req_raw.String())
 
 		if err != nil {
 			log.Println(err)
@@ -68,40 +76,65 @@ func handleConn(c net.Conn) {
 		}
 
 		c.Write([]byte(res.ToStr()))
+
+		// Check keep-alive
+		if strings.ToLower(res.Connection) != "keep-alive" {
+			return
+		}
 	}
 }
 
-func handleRequest(req http_common.HttpReq) (http_common.HttpRes, error) {
-	var res http_common.HttpRes
-	var res_body = []byte("")
-	var file_path = string("")
-	target := req.Target
-
-	// Prepare Response
-	req_connection := req.Headers["Connection"]
-	res = http_common.HttpRes{
-		Version:    http_common.V0_9,
-		Connection: req_connection,
-	}
-
-	host := req.Headers["Host"]
-	scheme := req.Scheme
-	target_path, err := url.Parse(scheme + "://" + host + target)
-
-	if err != nil {
-		log.Println(err)
-	}
-
-	target_path.Path = path.Clean(target_path.Path)
-	ext := path.Ext(target_path.Path)
+func handleHead(target_url *url.URL, res *http_common.HttpRes) error {
+	var err error
+	var file_path string
+	ext := path.Ext(target_url.Path)
+	ext = strings.ToLower(ext)
 
 	// Page URLs
 	if ext == "" {
 		res.ContentType = mime.MimeTypes[".html"]
-		file_path = path.Join(ROOT_FS, target_path.Path)
+		file_path = path.Join(ROOT_FS, target_url.Path)
 
 		// Is Root
-		if target_path.Path == "/" {
+		if target_url.Path == "/" {
+			file_path = path.Join(ROOT_FS, "index.html")
+		}
+
+	} else { // Resource URLs
+		res.ContentType = mime.MimeTypes[ext]
+		if res.ContentType == "" {
+			res.ContentType = "application/octet-stream"
+		}
+		file_path = path.Join(ROOT_FS, target_url.Path)
+	}
+
+	stat, err := os.Stat(file_path)
+
+	if err != nil {
+		log.Println(err)
+		res.Status = http_common.StatusNotFound
+		res.ContentLength = 0
+	} else {
+		res.Status = http_common.StatusOK
+		res.ContentLength = int(stat.Size())
+	}
+
+	return err
+}
+
+func handleGet(target_url *url.URL, res *http_common.HttpRes) error {
+	var res_body []byte
+	var err error
+	ext := path.Ext(target_url.Path)
+	ext = strings.ToLower(ext)
+
+	// Page URLs
+	if ext == "" {
+		res.ContentType = mime.MimeTypes[".html"]
+		file_path := path.Join(ROOT_FS, target_url.Path)
+
+		// Is Root
+		if target_url.Path == "/" {
 			file_path = path.Join(ROOT_FS, "index.html")
 		}
 
@@ -112,7 +145,7 @@ func handleRequest(req http_common.HttpReq) (http_common.HttpRes, error) {
 		if res.ContentType == "" {
 			res.ContentType = "application/octet-stream"
 		}
-		file_path = path.Join(ROOT_FS, target_path.Path)
+		file_path := path.Join(ROOT_FS, target_url.Path)
 		res_body, err = file_system.LoadFile(file_path)
 	}
 
@@ -127,34 +160,84 @@ func handleRequest(req http_common.HttpReq) (http_common.HttpRes, error) {
 
 		res.Status = http_common.StatusNotFound
 		res.Body = []byte(not_found_page)
+		res.ContentLength = len(not_found_page)
 	} else {
 		res.Status = http_common.StatusOK
 		res.Body = res_body
+		res.ContentLength = len(res.Body)
 	}
 
-	return res, err
+	return err
 }
 
-func exctractRequest(c net.Conn) (string, error) {
-	// Implement proper HTTP reading (read till /r/n/r/n)
-	request_buffer := make([]byte, 1024)
-	n, err := c.Read(request_buffer)
+func handleRequest(req http_common.HttpReq) (http_common.HttpRes, error) {
+	var res http_common.HttpRes
+	target := req.Target
+
+	// Prepare Response
+	req_connection := req.Headers["Connection"]
+	res = http_common.HttpRes{
+		Version:    http_common.V1_1,
+		Connection: req_connection,
+	}
+
+	host := req.Headers["Host"]
+	method := req.Method
+	scheme := req.Scheme
+	target_url, err := url.Parse(scheme + "://" + host + target)
+	target_url.Path = path.Clean(target_url.Path)
 
 	if err != nil {
-		if errors.Is(err, io.EOF) {
-			return "", err
-		} else if errors.Is(err, net.ErrClosed) {
-			log.Println("Client disconnected:", c.RemoteAddr())
-			return "", err
+		log.Println(err)
+	}
+
+	switch method {
+	case "HEAD":
+		handleHead(target_url, &res)
+		break
+	case "GET":
+		handleGet(target_url, &res)
+		break
+	default:
+		log.Println("Invalid Method")
+		break
+	}
+
+	return res, nil
+}
+
+func extractRequest(c net.Conn) (bytes.Buffer, error) {
+	// Implement proper HTTP reading (read till /r/n/r/n)
+	tmp_buf := make([]byte, 1024)
+	var req_raw bytes.Buffer
+
+	for {
+		var n, err = c.Read(tmp_buf)
+
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				return req_raw, err
+			} else if errors.Is(err, net.ErrClosed) {
+				log.Println("Client disconnected:", c.RemoteAddr())
+				return req_raw, err
+			}
+		}
+
+		if n <= 0 {
+			log.Println("No data transmitted")
+			return req_raw, err
+		}
+
+		req_raw.Write(tmp_buf[:n])
+
+		is_header_end := strings.Contains(req_raw.String(), "\r\n\r\n")
+
+		if !is_header_end {
+			continue
+		} else {
+			break
 		}
 	}
 
-	if n <= 0 {
-		log.Println("No data transmitted")
-		return "", err
-	}
-
-	req_raw := string(request_buffer[:n])
-
-	return req_raw, err
+	return req_raw, nil
 }

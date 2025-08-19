@@ -44,7 +44,7 @@ func (res HttpRes) ToStr() string {
 		res.Version,
 		res.Status,
 		res.Status.ToStr(),
-		len(body_str),
+		res.ContentLength,
 		res.ContentType,
 		res.Connection,
 		body_str,
