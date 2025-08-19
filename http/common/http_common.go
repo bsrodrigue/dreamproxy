@@ -1,6 +1,19 @@
 package http_common
 
-import "fmt"
+import (
+	"strconv"
+	"strings"
+)
+
+type HttpVersion string
+
+const (
+	V0_9 HttpVersion = "0.9"
+	V1_0 HttpVersion = "1.0"
+	V1_1 HttpVersion = "1.1"
+	V2_0 HttpVersion = "2.0"
+	V3_0 HttpVersion = "3.0"
+)
 
 var HTTP_METHODS = []string{
 	"GET",
@@ -21,6 +34,37 @@ type HttpReq struct {
 	Body    []byte
 }
 
+func (req *HttpReq) ToStr() string {
+	var sb strings.Builder
+
+	// Pre-allocate roughly enough space
+	sb.Grow(1024 + len(req.Body))
+
+	// Request line GET / HTTP/1.1
+	sb.WriteString(req.Method)
+	sb.WriteByte(' ')
+	sb.WriteString(req.Target)
+	sb.WriteByte(' ')
+	sb.WriteString("HTTP/")
+	sb.WriteString(string(req.Version))
+	sb.WriteString("\r\n")
+
+	// Headers
+	for key, value := range req.Headers {
+		sb.WriteString(key)
+		sb.WriteString(": ")
+		sb.WriteString(value)
+		sb.WriteString("\r\n")
+	}
+
+	sb.WriteString("\r\n")
+
+	// Body
+	sb.Write(req.Body)
+
+	return sb.String()
+}
+
 type HttpRes struct {
 	Version       HttpVersion
 	Status        StatusCode
@@ -28,29 +72,49 @@ type HttpRes struct {
 	ContentLength int
 	ContentType   string
 	Connection    string
+	Headers       map[string]string
 	Body          []byte
 }
 
-func (res HttpRes) ToStr() string {
-	body_str := string(res.Body)
+func (res *HttpRes) ToStr() string {
+	var sb strings.Builder
 
-	response_str := fmt.Sprintf(
-		"HTTP/%s %d %s\r\n"+
-			"Server: dreamserver/0.0.1 (Archlinux)\r\n"+
-			"Content-Length: %d\r\n"+
-			"Content-Type: %s\r\n"+
-			"Connection: %s\r\n\r\n"+
-			"%s",
-		res.Version,
-		res.Status,
-		res.Status.ToStr(),
-		res.ContentLength,
-		res.ContentType,
-		res.Connection,
-		body_str,
-	)
+	// Pre-allocate roughly enough space
+	sb.Grow(1024 + len(res.Body))
 
-	return response_str
+	// Status line
+	sb.WriteString("HTTP/")
+	sb.WriteString(string(res.Version))
+	sb.WriteByte(' ')
+	sb.WriteString(strconv.Itoa(int(res.Status)))
+	sb.WriteByte(' ')
+	sb.WriteString(res.Status.ToStr())
+	sb.WriteString("\r\n")
+
+	// Headers
+	sb.WriteString("Server: dreamserver/0.0.1 (Archlinux)\r\n")
+	sb.WriteString("Content-Length: ")
+	sb.WriteString(strconv.Itoa(res.ContentLength))
+	sb.WriteString("\r\n")
+	sb.WriteString("Content-Type: ")
+	sb.WriteString(res.ContentType)
+	sb.WriteString("\r\n")
+	sb.WriteString("Connection: ")
+	sb.WriteString(res.Connection)
+
+	for key, value := range res.Headers {
+		sb.WriteString(key)
+		sb.WriteString(": ")
+		sb.WriteString(value)
+		sb.WriteString("\r\n")
+	}
+
+	sb.WriteString("\r\n")
+
+	// Body
+	sb.Write(res.Body)
+
+	return sb.String()
 }
 
 func IsValidHTTPVersion(version string) bool {
@@ -65,16 +129,6 @@ func IsValidHTTPVersion(version string) bool {
 	}
 	return validVersions[version]
 }
-
-type HttpVersion string
-
-const (
-	V0_9 HttpVersion = "0.9"
-	V1_0 HttpVersion = "1.0"
-	V1_1 HttpVersion = "1.1"
-	V2_0 HttpVersion = "2.0"
-	V3_0 HttpVersion = "3.0"
-)
 
 // StatusCode represents an HTTP status code.
 type StatusCode int

@@ -185,10 +185,26 @@ func handleRequest(req http_common.HttpReq) (http_common.HttpRes, error) {
 	method := req.Method
 	scheme := req.Scheme
 	target_url, err := url.Parse(scheme + "://" + host + target)
-	target_url.Path = path.Clean(target_url.Path)
 
 	if err != nil {
-		log.Println(err)
+		log.Println("Invalid URL:", err)
+		res.Status = http_common.StatusBadRequest
+		return res, err
+	}
+
+	target_url.Path = path.Clean(target_url.Path)
+
+	// Check if Proxy
+	if host == "djangoserver.com:8080" {
+
+		server_conn, err := net.Dial("tcp4", "localhost:8000")
+
+		if err != nil {
+			log.Println(err)
+		}
+
+		// Forward Request
+		server_conn.Write([]byte(req.ToStr()))
 	}
 
 	switch method {
@@ -207,7 +223,7 @@ func handleRequest(req http_common.HttpReq) (http_common.HttpRes, error) {
 }
 
 func extractRequest(c net.Conn) (bytes.Buffer, error) {
-	// Implement proper HTTP reading (read till /r/n/r/n)
+	//TODO: Extract this to ReadFull and WriteFull
 	tmp_buf := make([]byte, 1024)
 	var req_raw bytes.Buffer
 
