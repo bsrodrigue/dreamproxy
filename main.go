@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"net/http"
 	_ "net/http/pprof"
 	"net/url"
 	"os"
@@ -24,9 +23,6 @@ const PORT string = "8080"
 const ROOT_FS string = "staticfiles"
 
 func main() {
-	go func() {
-		log.Println(http.ListenAndServe("localhost:6060", nil))
-	}()
 	ln, err := net.Listen(PROTOCOL, fmt.Sprintf(":%s", PORT))
 
 	if err != nil {
@@ -37,6 +33,7 @@ func main() {
 
 	log.Printf("%s", fmt.Sprintf("listening on :%s", PORT))
 
+	// Server Loop
 	for {
 		conn, err := ln.Accept()
 
@@ -49,16 +46,27 @@ func main() {
 	}
 }
 
-// Create a ConnectionContext struct to handle each connection in a cleaner way
+func CreateBadRequestRes() *http_common.HttpRes {
+	res := http_common.CreateHttpRes()
+	res.Version = http_common.V1_1
+	res.Status = http_common.StatusBadRequest
+
+	res.SetServerHeaders()
+
+	return res
+}
+
+// Create a ClientSession struct to handle each connection in a cleaner way
 func handleConn(c net.Conn) {
-	// Parse HTTP header here to know whether to keep connection alive
 	defer c.Close()
 
 	for {
-		req_raw, err := ReadRequest(c)
+		req_raw, err := ReadFullHttpMessage(c)
 
 		if err != nil {
 			log.Println(err)
+			res := CreateBadRequestRes()
+			c.Write([]byte(res.ToStr()))
 			return
 		}
 
@@ -66,6 +74,8 @@ func handleConn(c net.Conn) {
 
 		if err != nil {
 			log.Println(err)
+			res := CreateBadRequestRes()
+			c.Write([]byte(res.ToStr()))
 			return
 		}
 
@@ -74,6 +84,8 @@ func handleConn(c net.Conn) {
 
 		if err != nil {
 			log.Println(err)
+			res := CreateBadRequestRes()
+			c.Write([]byte(res.ToStr()))
 			return
 		}
 
@@ -200,7 +212,7 @@ func handleRequest(req *http_common.HttpReq) (*http_common.HttpRes, error) {
 	if err != nil {
 		log.Println("Invalid URL:", err)
 		res.Status = http_common.StatusBadRequest
-		return res, err
+		return CreateBadRequestRes(), err
 	}
 
 	target_url.Path = path.Clean(target_url.Path)
@@ -211,7 +223,7 @@ func handleRequest(req *http_common.HttpReq) (*http_common.HttpRes, error) {
 		server_conn, err := net.Dial("tcp4", "localhost:8000")
 
 		if err != nil {
-			log.Println(err)
+			return CreateBadRequestRes(), err
 		}
 
 		// Forward Request
@@ -219,16 +231,20 @@ func handleRequest(req *http_common.HttpReq) (*http_common.HttpRes, error) {
 
 		if err != nil {
 			log.Println("Bytes written: ", n)
-			log.Println("Error while forwarding request: ", err)
+			return CreateBadRequestRes(), err
 		}
 
-		res_buf, err := ReadRequest(server_conn)
+		res_buf, err := ReadFullHttpMessage(server_conn)
 
 		if err != nil {
-			log.Println(err)
+			return CreateBadRequestRes(), err
 		}
 
 		res, err = http_parser.ParseRawHttpRes(res_buf)
+
+		if err != nil {
+			return CreateBadRequestRes(), err
+		}
 
 	} else {
 		switch method {
@@ -239,21 +255,19 @@ func handleRequest(req *http_common.HttpReq) (*http_common.HttpRes, error) {
 			handleGet(target_url, res)
 			break
 		default:
-			log.Println("Invalid Method")
-			break
+			return CreateBadRequestRes(), err
 		}
 	}
 
 	return res, nil
 }
 
-func ReadRequest(c net.Conn) (string, error) {
-	tmp_buf := make([]byte, 1024)
+func ExtractHeadersAndBodyStart(c net.Conn) ([]byte, []byte, error) {
 	var req_buf bytes.Buffer
 	var body_buf bytes.Buffer
-	var body_len int
-	var body_read int = 0
-	var eoh int
+	var end_of_headers int = -1
+	var err error
+	tmp_buf := make([]byte, 1024)
 
 	for {
 		n, err := c.Read(tmp_buf)
@@ -261,63 +275,101 @@ func ReadRequest(c net.Conn) (string, error) {
 		// EOF
 		if n == 0 {
 			log.Println("Client disconnected before full message")
-			return "", err
+			return nil, nil, err
 		}
 
 		if err != nil {
 			if errors.Is(err, net.ErrClosed) {
 				log.Println("Client disconnected:", c.RemoteAddr())
-				return "", err
+				return nil, nil, err
 			} else {
 				log.Println("Error while reading client socket: ", err)
-				return "", err
+				return nil, nil, err
 			}
 		}
 
-		req_buf.Write(tmp_buf[:n])
+		_, err = req_buf.Write(tmp_buf[:n])
+
+		if err != nil {
+			log.Println(err)
+		}
 
 		// End of Headers?
-		eoh = bytes.Index(req_buf.Bytes(), []byte("\r\n\r\n"))
+		end_of_headers = bytes.Index(req_buf.Bytes(), []byte("\r\n\r\n"))
 
-		if eoh == -1 {
+		if end_of_headers == -1 {
 			continue
 		}
 
 		break
 	}
 
-	// Extract Headers
+	leftover_bytes := req_buf.Bytes()[end_of_headers:]
+
+	if len(leftover_bytes)-4 != 0 { // There are body leftovers
+		leftover_bytes = leftover_bytes[4:]
+		body_buf.Grow(len(leftover_bytes) + 1024)
+		body_buf.Write(leftover_bytes)
+	}
+
 	req_bytes := req_buf.Bytes()
+
+	req_bytes = req_bytes[:end_of_headers+4]
+
+	return req_bytes, body_buf.Bytes(), err
+}
+
+func ReadFullHttpMessage(c net.Conn) (string, error) {
+	tmp_buf := make([]byte, 2048)
+
+	var req_buf bytes.Buffer
+	var body_buf bytes.Buffer
+	var max_body_len int
+	var keepAlive bool = false
+
+	req_bytes, body_bytes, err := ExtractHeadersAndBodyStart(c)
+
+	if err != nil {
+		return "", err
+	}
+
+	body_buf.Grow(1024 + len(body_bytes))
+	req_buf.Grow(1024 + len(req_bytes))
+
+	body_buf.Write(body_bytes)
+	req_buf.Write(req_bytes)
+
+	// Extract Headers
 	eo_reqline := bytes.Index(req_bytes, []byte("\r\n"))
 
-	header_bytes := req_bytes[eo_reqline+2 : eoh]
+	header_bytes := req_bytes[eo_reqline+2:]
 
 	header_str := string(header_bytes)
 
 	headers := http_parser.ParseHttpHeaders(header_str)
 
 	content_length := headers["content-length"]
+	keepAlive = strings.ToLower(headers["connection"]) == "keep-alive"
 
 	if content_length == "" || content_length == "0" {
-		body_len = 0
+		max_body_len = 0
 	} else {
-		_body_len, err := strconv.Atoi(content_length)
+		max_body_len, err = strconv.Atoi(content_length)
 
 		if err != nil {
 			log.Println("Error while parsing content-length: ", err)
 			return "", err
 		}
-
-		body_len = _body_len
 	}
 
-	body_buf.Grow(body_len)
+	// Check leftover body content from previous reads
+	body_read := len(body_bytes)
 
-	for body_len != 0 && body_read < body_len {
+	for max_body_len != 0 && body_read < max_body_len {
 		n, err := c.Read(tmp_buf)
 
 		// EOF
-		if n == 0 {
+		if n == 0 && !keepAlive {
 			log.Println("Client disconnected before full body")
 			return "", err
 		}
@@ -336,7 +388,11 @@ func ReadRequest(c net.Conn) (string, error) {
 		body_buf.Write(tmp_buf[:n])
 	}
 
-	_, err := req_buf.Write(body_buf.Bytes())
+	n, err := req_buf.Write(body_buf.Bytes())
+
+	if n < max_body_len {
+		log.Println("Truncated")
+	}
 
 	if err != nil {
 		log.Println("Error while assembling request: ", err)

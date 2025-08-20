@@ -1,6 +1,7 @@
 package http_common
 
 import (
+	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -85,6 +86,13 @@ type HttpRes struct {
 	Body []byte
 }
 
+func CreateHttpRes() *HttpRes {
+	return &HttpRes{
+		Version: V1_1,
+		Headers: make(map[string]string),
+	}
+}
+
 func (res *HttpRes) SetServerHeaders() {
 	now := time.Now().UTC() // Make this configurable
 	res.Headers["server"] = "dreamserver/0.0.1 (Archlinux)"
@@ -121,6 +129,7 @@ func (res *HttpRes) ToStr() string {
 
 	sb.WriteString("\r\n\r\n")
 
+	log.Println(len(res.Body))
 	// Body
 	sb.Write(res.Body)
 
