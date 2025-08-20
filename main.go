@@ -49,6 +49,7 @@ func main() {
 	}
 }
 
+// Create a ConnectionContext struct to handle each connection in a cleaner way
 func handleConn(c net.Conn) {
 	// Parse HTTP header here to know whether to keep connection alive
 	defer c.Close()
@@ -68,8 +69,7 @@ func handleConn(c net.Conn) {
 			return
 		}
 
-		req.Headers["X-Forwarded-For"] = c.RemoteAddr().String()
-		req.Headers["Via"] = "HTTP/1.1 dreamserver"
+		req.Headers["x-forwarded-for"] = c.RemoteAddr().String()
 		res, err := handleRequest(req)
 
 		if err != nil {
@@ -77,10 +77,11 @@ func handleConn(c net.Conn) {
 			return
 		}
 
+		res.SetServerHeaders() // Add final headers
 		c.Write([]byte(res.ToStr()))
 
 		// Check keep-alive
-		if strings.ToLower(res.Connection) != "keep-alive" {
+		if strings.ToLower(res.Headers["connection"]) != "keep-alive" {
 			return
 		}
 	}
@@ -94,7 +95,7 @@ func handleHead(target_url *url.URL, res *http_common.HttpRes) error {
 
 	// Page URLs
 	if ext == "" {
-		res.ContentType = mime.MimeTypes[".html"]
+		res.Headers["content-type"] = mime.MimeTypes[".html"]
 		file_path = path.Join(ROOT_FS, target_url.Path)
 
 		// Is Root
@@ -103,9 +104,9 @@ func handleHead(target_url *url.URL, res *http_common.HttpRes) error {
 		}
 
 	} else { // Resource URLs
-		res.ContentType = mime.MimeTypes[ext]
-		if res.ContentType == "" {
-			res.ContentType = "application/octet-stream"
+		res.Headers["content-type"] = mime.MimeTypes[ext]
+		if res.Headers["content-type"] == "" {
+			res.Headers["content-type"] = "application/octet-stream"
 		}
 		file_path = path.Join(ROOT_FS, target_url.Path)
 	}
@@ -115,10 +116,10 @@ func handleHead(target_url *url.URL, res *http_common.HttpRes) error {
 	if err != nil {
 		log.Println(err)
 		res.Status = http_common.StatusNotFound
-		res.ContentLength = 0
+		res.Headers["content-length"] = "0"
 	} else {
 		res.Status = http_common.StatusOK
-		res.ContentLength = int(stat.Size())
+		res.Headers["content-length"] = fmt.Sprint(stat.Size())
 	}
 
 	return err
@@ -145,8 +146,8 @@ func handleGet(target_url *url.URL, res *http_common.HttpRes) error {
 	} else { // Resource URLs
 		res.Headers["Content-Type"] = mime.MimeTypes[ext]
 
-		if res.ContentType == "" {
-			res.Headers["Content-Type"] = "application/octet-stream"
+		if res.Headers["content-type"] == "" {
+			res.Headers["content-type"] = "application/octet-stream"
 		}
 		file_path := path.Join(ROOT_FS, target_url.Path)
 		res_body, err = file_system.LoadFile(file_path)
@@ -163,15 +164,15 @@ func handleGet(target_url *url.URL, res *http_common.HttpRes) error {
 
 		res.Status = http_common.StatusNotFound
 
-		res.Headers["Content-Length"] = fmt.Sprint(len(not_found_page))
-		res.Headers["Connection"] = "close"
+		res.Headers["content-length"] = fmt.Sprint(len(not_found_page))
+		res.Headers["connection"] = "close"
 
 		res.Body = []byte(not_found_page)
 
 	} else {
 		res.Status = http_common.StatusOK
 
-		res.Headers["Content-Length"] = fmt.Sprint(len(res.Body))
+		res.Headers["content-length"] = fmt.Sprint(len(res.Body))
 
 		res.Body = res_body
 	}
@@ -184,13 +185,13 @@ func handleRequest(req *http_common.HttpReq) (*http_common.HttpRes, error) {
 	target := req.Target
 
 	// Prepare Response
-	req_connection := req.Headers["Connection"]
 	res = &http_common.HttpRes{
-		Version:    http_common.V1_1,
-		Connection: req_connection,
+		Version: http_common.V1_1,
 	}
 
-	host := req.Headers["Host"]
+	res.Headers["connection"] = req.Headers["connection"]
+
+	host := req.Headers["host"]
 	method := req.Method
 	scheme := req.Scheme
 	target_url, err := url.Parse(scheme + "://" + host + target)

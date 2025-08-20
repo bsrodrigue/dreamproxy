@@ -3,6 +3,7 @@ package http_common
 import (
 	"strconv"
 	"strings"
+	"time"
 )
 
 type HttpVersion string
@@ -17,12 +18,14 @@ const (
 
 var HTTP_METHODS = []string{
 	"GET",
-	"POST",
-	"PUT",
-	"PATCH",
-	"DELETE",
-	"OPTIONS",
 	"HEAD",
+	"OPTIONS",
+	"TRACE",
+	"DELETE",
+	"PUT",
+	"POST",
+	"PATCH",
+	"CONNECT",
 }
 
 type HttpReq struct {
@@ -76,20 +79,25 @@ type HttpRes struct {
 	Status  StatusCode
 
 	// Response Headers
-	Server        string
-	ContentLength int
-	ContentType   string
-	Connection    string
-	Headers       map[string]string
+	Headers map[string]string
 
 	// Response Body
 	Body []byte
 }
 
+func (res *HttpRes) SetServerHeaders() {
+	now := time.Now().UTC() // Make this configurable
+	res.Headers["server"] = "dreamserver/0.0.1 (Archlinux)"
+	res.Headers["Via"] = "HTTP/1.1 dreamserver"
+	res.Headers["date"] = now.Format(time.RFC1123)
+}
+
+func (res *HttpRes) SetReverseProxyHeaders() {
+
+}
+
 func (res *HttpRes) ToStr() string {
 	var sb strings.Builder
-
-	res.Headers["Server"] = "dreamserver/0.0.1 (Archlinux)"
 
 	// Pre-allocate roughly enough space
 	sb.Grow(1024 + len(res.Body))
