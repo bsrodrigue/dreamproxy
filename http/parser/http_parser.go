@@ -1,6 +1,7 @@
 package http_parser
 
 import (
+	"bytes"
 	"dreamproxy/http/common"
 	"fmt"
 	"log"
@@ -10,17 +11,27 @@ import (
 )
 
 func ParseRawHttpReq(raw_http string) (*http_common.HttpReq, error) {
-	lines := strings.Split(raw_http, "\n")
-	first_line := lines[0]
+	portions := strings.SplitN(raw_http, "\r\n", 2)
 
-	if first_line == "" {
-		return nil, fmt.Errorf("empty HTTP Request")
+	if len(portions) == 0 {
+		return nil, fmt.Errorf("Empty HTTP Request")
 	}
 
-	raw_parts := strings.Split(first_line, " ")
+	request_line := portions[0]
+	rest := strings.Split(portions[1], "\r\n\r\n")
+
+	if len(rest) == 0 {
+		return nil, fmt.Errorf("No HTTP Headers provided")
+	}
+
+	raw_header := rest[0]
+
+	// Parse Body (Optional)
+
+	raw_parts := strings.Split(request_line, " ")
 
 	if len(raw_parts) < 3 {
-		return nil, fmt.Errorf("missing portions in first line")
+		return nil, fmt.Errorf("missing parts on request line")
 	}
 
 	raw_method := strings.TrimSpace(raw_parts[0])
@@ -31,6 +42,7 @@ func ParseRawHttpReq(raw_http string) (*http_common.HttpReq, error) {
 		return nil, fmt.Errorf("invalid HTTP method")
 	}
 
+	// Not permissive enough?
 	if !strings.HasPrefix(raw_target, "/") {
 		return nil, fmt.Errorf("invalid HTTP target")
 	}
@@ -52,28 +64,7 @@ func ParseRawHttpReq(raw_http string) (*http_common.HttpReq, error) {
 	}
 
 	// Handle Headers
-	header_lines := lines[1:]
-	headers := map[string]string{}
-
-	for _, line := range header_lines {
-		key_val := strings.Split(line, ":")
-		val := string("")
-
-		if len(key_val) < 2 {
-			continue
-		}
-
-		key := strings.TrimSpace(key_val[0])
-
-		if len(key_val) > 2 {
-			val = strings.Join(key_val[1:], ":")
-			val = strings.TrimSpace(val)
-		} else {
-			val = key_val[1]
-		}
-
-		headers[key] = val
-	}
+	headers := ParseHttpHeaders(raw_header)
 
 	return &http_common.HttpReq{
 		Scheme:  "http",
@@ -83,19 +74,23 @@ func ParseRawHttpReq(raw_http string) (*http_common.HttpReq, error) {
 		Headers: headers,
 	}, nil
 }
+
 func ParseRawHttpRes(raw_http string) (*http_common.HttpRes, error) {
-	lines := strings.Split(strings.ReplaceAll(raw_http, "\r\n", "\n"), "\n")
+	var body bytes.Buffer
+	lines := strings.Split(raw_http, "\r\n")
+
 	if len(lines) == 0 {
 		return nil, fmt.Errorf("empty HTTP response")
 	}
 
-	first_line := strings.TrimSpace(lines[0])
-	if first_line == "" {
+	status_line := strings.TrimSpace(lines[0])
+
+	if status_line == "" {
 		return nil, fmt.Errorf("empty HTTP response")
 	}
 
 	// HTTP/1.1 200 OK
-	parts := strings.SplitN(first_line, " ", 3)
+	parts := strings.SplitN(status_line, " ", 3)
 	if len(parts) < 2 {
 		return nil, fmt.Errorf("invalid status line")
 	}
@@ -145,11 +140,11 @@ func ParseRawHttpRes(raw_http string) (*http_common.HttpRes, error) {
 	content_length, err := strconv.Atoi(headers["Content-Length"])
 
 	if err != nil {
-		log.Println("Error during content length conversion: ", err)
-		return nil, err
+		return nil, fmt.Errorf("Error during content length conversion: %s", err)
 	}
 
 	if content_length > 0 {
+		body.Grow(content_length)
 		// Pinpoint body offset
 		response_end := strings.Index(raw_http, "\r\n\r\n")
 
@@ -158,11 +153,38 @@ func ParseRawHttpRes(raw_http string) (*http_common.HttpRes, error) {
 			return nil, err
 		}
 
+		response_end += 4 // Move offset to body
+
+		body.WriteString(raw_http[response_end : response_end+content_length])
 	}
 
 	return &http_common.HttpRes{
 		Status:  http_common.StatusCode(status_code),
 		Version: http_common.HttpVersion(version_number),
 		Headers: headers,
+		Body:    body.Bytes(),
 	}, nil
+}
+
+func ParseHttpHeaders(raw_headers string) map[string]string {
+	lines := strings.Split(raw_headers, "\r\n")
+
+	headers := map[string]string{}
+	for _, line := range lines[1:] {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+
+		key_val := strings.SplitN(line, ":", 2)
+		if len(key_val) < 2 {
+			continue
+		}
+
+		key := strings.TrimSpace(key_val[0])
+		val := strings.TrimSpace(key_val[1])
+		headers[key] = val
+	}
+
+	return headers
 }
