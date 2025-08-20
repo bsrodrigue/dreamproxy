@@ -8,7 +8,6 @@ import (
 	"dreamproxy/mime"
 	"errors"
 	"fmt"
-	"io"
 	"log"
 	"net"
 	"net/http"
@@ -16,6 +15,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"strconv"
 	"strings"
 )
 
@@ -55,14 +55,14 @@ func handleConn(c net.Conn) {
 	defer c.Close()
 
 	for {
-		req_raw, err := extractRequest(c)
+		req_raw, err := ReadRequest(c)
 
 		if err != nil {
 			log.Println(err)
 			return
 		}
 
-		req, err := http_parser.ParseRawHttpReq(req_raw.String())
+		req, err := http_parser.ParseRawHttpReq(req_raw)
 
 		if err != nil {
 			log.Println(err)
@@ -222,13 +222,13 @@ func handleRequest(req *http_common.HttpReq) (*http_common.HttpRes, error) {
 			log.Println("Error while forwarding request: ", err)
 		}
 
-		res_buf, err := extractRequest(server_conn)
+		res_buf, err := ReadRequest(server_conn)
 
 		if err != nil {
 			log.Println(err)
 		}
 
-		res, err = http_parser.ParseRawHttpRes(res_buf.String())
+		res, err = http_parser.ParseRawHttpRes(res_buf)
 
 	} else {
 		switch method {
@@ -247,34 +247,101 @@ func handleRequest(req *http_common.HttpReq) (*http_common.HttpRes, error) {
 	return res, nil
 }
 
-func extractRequest(c net.Conn) (*bytes.Buffer, error) {
+func ReadRequest(c net.Conn) (string, error) {
 	tmp_buf := make([]byte, 1024)
-	var req_raw bytes.Buffer
+	var req_buf bytes.Buffer
+	var body_buf bytes.Buffer
+	var body_len int
+	var body_read int = 0
+	var eoh int
 
 	for {
 		n, err := c.Read(tmp_buf)
 
+		// EOF
+		if n == 0 {
+			log.Println("Client disconnected before full message")
+			return "", err
+		}
+
 		if err != nil {
-			// End of File Reached
-			if errors.Is(err, io.EOF) {
-				return &req_raw, nil
-			} else if errors.Is(err, net.ErrClosed) {
+			if errors.Is(err, net.ErrClosed) {
 				log.Println("Client disconnected:", c.RemoteAddr())
-				return nil, err
+				return "", err
 			} else {
 				log.Println("Error while reading client socket: ", err)
-				return nil, err
+				return "", err
 			}
 		}
 
-		req_raw.Write(tmp_buf[:n])
+		req_buf.Write(tmp_buf[:n])
 
-		if bytes.Index(req_raw.Bytes(), []byte("\r\n\r\n")) == -1 {
+		// End of Headers?
+		eoh = bytes.Index(req_buf.Bytes(), []byte("\r\n\r\n"))
+
+		if eoh == -1 {
 			continue
-		} else {
-			break
 		}
+
+		break
 	}
 
-	return &req_raw, nil
+	// Extract Headers
+	req_bytes := req_buf.Bytes()
+	eo_reqline := bytes.Index(req_bytes, []byte("\r\n"))
+
+	header_bytes := req_bytes[eo_reqline+2 : eoh]
+
+	header_str := string(header_bytes)
+
+	headers := http_parser.ParseHttpHeaders(header_str)
+
+	content_length := headers["content-length"]
+
+	if content_length == "" || content_length == "0" {
+		body_len = 0
+	} else {
+		_body_len, err := strconv.Atoi(content_length)
+
+		if err != nil {
+			log.Println("Error while parsing content-length: ", err)
+			return "", err
+		}
+
+		body_len = _body_len
+	}
+
+	body_buf.Grow(body_len)
+
+	for body_len != 0 && body_read < body_len {
+		n, err := c.Read(tmp_buf)
+
+		// EOF
+		if n == 0 {
+			log.Println("Client disconnected before full body")
+			return "", err
+		}
+
+		if err != nil {
+			if errors.Is(err, net.ErrClosed) {
+				log.Println("Client disconnected:", c.RemoteAddr())
+				return "", err
+			} else {
+				log.Println("Error while reading client socket: ", err)
+				return "", err
+			}
+		}
+
+		body_read += n
+		body_buf.Write(tmp_buf[:n])
+	}
+
+	_, err := req_buf.Write(body_buf.Bytes())
+
+	if err != nil {
+		log.Println("Error while assembling request: ", err)
+		return "", err
+	}
+
+	return req_buf.String(), nil
 }
