@@ -172,7 +172,7 @@ func handleGet(target_url *url.URL, res *http_common.HttpRes) error {
 	} else {
 		res.Status = http_common.StatusOK
 
-		res.Headers["content-length"] = fmt.Sprint(len(res.Body))
+		res.Headers["content-length"] = fmt.Sprint(len(res_body))
 
 		res.Body = res_body
 	}
@@ -187,6 +187,7 @@ func handleRequest(req *http_common.HttpReq) (*http_common.HttpRes, error) {
 	// Prepare Response
 	res = &http_common.HttpRes{
 		Version: http_common.V1_1,
+		Headers: make(map[string]string),
 	}
 
 	res.Headers["connection"] = req.Headers["connection"]
