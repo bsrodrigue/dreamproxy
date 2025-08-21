@@ -1,8 +1,12 @@
 package http_parser
 
 import (
+	"bytes"
 	"dreamproxy/http/common"
+	"errors"
 	"fmt"
+	"log"
+	"net"
 	"regexp"
 	"slices"
 	"strconv"
@@ -208,4 +212,144 @@ func isValidTarget(target string, method string) bool {
 	default:
 		return false
 	}
+}
+
+func ExtractHeadersAndBodyStart(c net.Conn) ([]byte, []byte, error) {
+	var req_buf bytes.Buffer
+	var body_buf bytes.Buffer
+	var end_of_headers int = -1
+	var err error
+	tmp_buf := make([]byte, 1024)
+
+	for {
+		n, err := c.Read(tmp_buf)
+
+		// EOF
+		if n == 0 {
+			log.Println("Client disconnected before full message")
+			return nil, nil, err
+		}
+
+		if err != nil {
+			if errors.Is(err, net.ErrClosed) {
+				log.Println("Client disconnected:", c.RemoteAddr())
+				return nil, nil, err
+			} else {
+				log.Println("Error while reading client socket: ", err)
+				return nil, nil, err
+			}
+		}
+
+		_, err = req_buf.Write(tmp_buf[:n])
+
+		if err != nil {
+			log.Println(err)
+		}
+
+		// End of Headers?
+		end_of_headers = bytes.Index(req_buf.Bytes(), []byte("\r\n\r\n"))
+
+		if end_of_headers == -1 {
+			continue
+		}
+
+		break
+	}
+
+	leftover_bytes := req_buf.Bytes()[end_of_headers:]
+
+	if len(leftover_bytes)-4 != 0 { // There are body leftovers
+		leftover_bytes = leftover_bytes[4:]
+		body_buf.Grow(len(leftover_bytes) + 1024)
+		body_buf.Write(leftover_bytes)
+	}
+
+	req_bytes := req_buf.Bytes()
+
+	req_bytes = req_bytes[:end_of_headers+4]
+
+	return req_bytes, body_buf.Bytes(), err
+}
+
+func ReadFullHttpMessage(c net.Conn) (string, error) {
+	tmp_buf := make([]byte, 2048)
+
+	var req_buf bytes.Buffer
+	var body_buf bytes.Buffer
+	var max_body_len int
+	var keepAlive bool = false
+
+	req_bytes, body_bytes, err := ExtractHeadersAndBodyStart(c)
+
+	if err != nil {
+		return "", err
+	}
+
+	body_buf.Grow(1024 + len(body_bytes))
+	req_buf.Grow(1024 + len(req_bytes))
+
+	body_buf.Write(body_bytes)
+	req_buf.Write(req_bytes)
+
+	// Extract Headers
+	eo_reqline := bytes.Index(req_bytes, []byte("\r\n"))
+
+	header_bytes := req_bytes[eo_reqline+2:]
+
+	header_str := string(header_bytes)
+
+	headers := ParseHttpHeaders(header_str)
+
+	content_length := headers["content-length"]
+	keepAlive = strings.ToLower(headers["connection"]) == "keep-alive"
+
+	if content_length == "" || content_length == "0" {
+		max_body_len = 0
+	} else {
+		max_body_len, err = strconv.Atoi(content_length)
+
+		if err != nil {
+			log.Println("Error while parsing content-length: ", err)
+			return "", err
+		}
+	}
+
+	// Check leftover body content from previous reads
+	body_read := len(body_bytes)
+
+	for max_body_len != 0 && body_read < max_body_len {
+		n, err := c.Read(tmp_buf)
+
+		// EOF
+		if n == 0 && !keepAlive {
+			log.Println("Client disconnected before full body")
+			return "", err
+		}
+
+		if err != nil {
+			if errors.Is(err, net.ErrClosed) {
+				log.Println("Client disconnected:", c.RemoteAddr())
+				return "", err
+			} else {
+				log.Println("Error while reading client socket: ", err)
+				return "", err
+			}
+		}
+
+		body_read += n
+		body_buf.Write(tmp_buf[:n])
+	}
+
+	n, err := req_buf.Write(body_buf.Bytes())
+
+	if n < max_body_len {
+		log.Println("Truncated")
+	}
+
+	if err != nil {
+		log.Println("Error while assembling request: ", err)
+		return "", err
+	}
+
+	return req_buf.String(), nil
 }

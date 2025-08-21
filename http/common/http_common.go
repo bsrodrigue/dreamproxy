@@ -66,12 +66,16 @@ func (req *HttpReq) ToStr() string {
 		sb.WriteString("\r\n")
 	}
 
-	sb.WriteString("\r\n\r\n")
+	sb.WriteString("\r\n")
 
 	// Body
 	sb.Write(req.Body)
 
 	return sb.String()
+}
+
+func (req *HttpReq) ToBytes() []byte {
+	return []byte(req.ToStr())
 }
 
 type HttpRes struct {
@@ -127,7 +131,7 @@ func (res *HttpRes) ToStr() string {
 		sb.WriteString("\r\n")
 	}
 
-	sb.WriteString("\r\n\r\n")
+	sb.WriteString("\r\n")
 
 	log.Println(len(res.Body))
 	// Body
