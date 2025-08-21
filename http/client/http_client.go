@@ -14,10 +14,7 @@ type RequestConfig struct {
 	Body    []byte
 }
 
-// <scheme>://<hostname>:<port>/path
-// domain.com:8080/page1/sbh=80
-func Get(host string, port int, path string, cfg RequestConfig) (*http_common.HttpRes, error) {
-
+func PreprocessCfg(cfg RequestConfig, host string, path string) RequestConfig {
 	if cfg.Headers == nil {
 		cfg.Headers = make(map[string]string)
 	}
@@ -48,15 +45,10 @@ func Get(host string, port int, path string, cfg RequestConfig) (*http_common.Ht
 
 	path += "/"
 
-	req := http_common.HttpReq{
-		Version: string(http_common.V1_1), // Make configurable
-		Method:  "GET",
-		Scheme:  "http",
-		Target:  path,
-		Headers: cfg.Headers,
-		Body:    cfg.Body,
-	}
+	return cfg
+}
 
+func HandleRequest(req http_common.HttpReq, host string, port int) (*http_common.HttpRes, error) {
 	connection, err := net.Dial("tcp4", net.JoinHostPort(host, fmt.Sprint(port)))
 
 	if err != nil {
@@ -94,4 +86,47 @@ func Get(host string, port int, path string, cfg RequestConfig) (*http_common.Ht
 	}
 
 	return res, nil
+}
+
+func MakeRequest(method string, host string, port int, path string, cfg RequestConfig) (*http_common.HttpRes, error) {
+	cfg = PreprocessCfg(cfg, host, path)
+
+	req := http_common.HttpReq{
+		Version: string(http_common.V1_1), // Make configurable
+		Method:  strings.ToUpper(method),
+		Scheme:  "http",
+		Target:  path,
+		Headers: cfg.Headers,
+		Body:    cfg.Body,
+	}
+
+	return HandleRequest(req, host, port)
+}
+
+func Get(host string, port int, path string, cfg RequestConfig) (*http_common.HttpRes, error) {
+	return MakeRequest("GET", host, port, path, cfg)
+}
+
+func Post(host string, port int, path string, cfg RequestConfig) (*http_common.HttpRes, error) {
+	return MakeRequest("POST", host, port, path, cfg)
+}
+
+func Put(host string, port int, path string, cfg RequestConfig) (*http_common.HttpRes, error) {
+	return MakeRequest("PUT", host, port, path, cfg)
+}
+
+func Patch(host string, port int, path string, cfg RequestConfig) (*http_common.HttpRes, error) {
+	return MakeRequest("PATCH", host, port, path, cfg)
+}
+
+func Delete(host string, port int, path string, cfg RequestConfig) (*http_common.HttpRes, error) {
+	return MakeRequest("DELETE", host, port, path, cfg)
+}
+
+func Head(host string, port int, path string, cfg RequestConfig) (*http_common.HttpRes, error) {
+	return MakeRequest("HEAD", host, port, path, cfg)
+}
+
+func Options(host string, port int, path string, cfg RequestConfig) (*http_common.HttpRes, error) {
+	return MakeRequest("OPTIONS", host, port, path, cfg)
 }

@@ -1,5 +1,7 @@
 package server_config
 
-type DreamConfig struct {
+type HostConfig struct {
 	Host string
+	Port int
+	Root string
 }

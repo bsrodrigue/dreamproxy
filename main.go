@@ -217,7 +217,8 @@ func handleRequest(req *http_common.HttpReq) (*http_common.HttpRes, error) {
 
 	// Check if Proxy
 	if host == "djangoserver.com:8080" {
-		res, err = http_client.Get("djangoserver.com", 8000, target_url.Path, http_client.RequestConfig{
+
+		res, err = http_client.MakeRequest(req.Method, "djangoserver.com", 8000, target_url.Path, http_client.RequestConfig{
 			Headers: req.Headers,
 			Body:    req.Body,
 		})
@@ -226,10 +227,10 @@ func handleRequest(req *http_common.HttpReq) (*http_common.HttpRes, error) {
 			return CreateBadRequestRes(), err
 		}
 
-		if res.Status == http_common.StatusMovedPermanently {
+		if res.Status == http_common.StatusMovedPermanently || res.Status == http_common.StatusFound {
 			location := res.Headers["location"]
 
-			res, err = http_client.Get("djangoserver.com", 8000, location, http_client.RequestConfig{
+			res, err = http_client.MakeRequest(req.Method, "djangoserver.com", 8000, location, http_client.RequestConfig{
 				Headers: req.Headers,
 				Body:    req.Body,
 			})
