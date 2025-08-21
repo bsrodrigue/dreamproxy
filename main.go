@@ -98,6 +98,7 @@ func handleConn(c net.Conn) {
 }
 
 func handleHead(target_url *url.URL, res *http_common.HttpRes) error {
+	// Write a static file finder (resolver)
 	var err error
 	var file_path string
 	ext := path.Ext(target_url.Path)
