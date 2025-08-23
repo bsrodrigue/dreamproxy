@@ -23,6 +23,7 @@ import (
 const PROTOCOL string = "tcp4"
 const PORT string = "8080"
 const ROOT_FS string = "staticfiles"
+const LOG_FILE string = "/var/log/dreamserver/access.log"
 
 func main() {
 	ln, err := net.Listen(PROTOCOL, fmt.Sprintf(":%s", PORT))
@@ -212,7 +213,6 @@ func handleGet(target_url *url.URL, res *http_common.HttpRes) error {
 	}
 
 	if err != nil {
-		log.Println(err)
 		not_found_page, err := file_system.LoadFile(path.Join(ROOT_FS, "not_found.html"))
 
 		if err != nil {
