@@ -96,7 +96,7 @@ The long-term vision includes:
 
 * Secure, configurable, high-performance reverse proxying
 * Production-ready observability (structured logs, metrics, tracing)
-* Modern HTTP/2 and HTTP/3 support
+* HTTP/1.1 support
 * Pluggable middleware for authentication, caching, rate limiting
 
 ---
