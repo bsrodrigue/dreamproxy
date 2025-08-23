@@ -3,6 +3,7 @@ package http_parser
 import (
 	"bytes"
 	"dreamproxy/http/common"
+	"dreamproxy/logger"
 	"errors"
 	"fmt"
 	"log"
@@ -226,16 +227,22 @@ func ExtractHeadersAndBodyStart(c net.Conn) ([]byte, []byte, error) {
 
 		// EOF
 		if n == 0 {
-			log.Println("Client disconnected before full message")
+			log := logger.NewRequestLog(logger.HTTP_PARSER, logger.ERROR, logger.REQ_READING_ERROR, "Client disconnected before full message")
+			log.Request.ClientIP = c.RemoteAddr().String()
+			fmt.Println(log.ToText())
 			return nil, nil, err
 		}
 
 		if err != nil {
 			if errors.Is(err, net.ErrClosed) {
-				log.Println("Client disconnected:", c.RemoteAddr())
+				log := logger.NewRequestLog(logger.HTTP_PARSER, logger.ERROR, logger.REQ_READING_ERROR, "Client disconnected")
+				log.Request.ClientIP = c.RemoteAddr().String()
+				fmt.Println(log.ToText())
 				return nil, nil, err
 			} else {
-				log.Println("Error while reading client socket: ", err)
+				log := logger.NewRequestLog(logger.HTTP_PARSER, logger.ERROR, logger.REQ_READING_ERROR, "Error while reading socket")
+				log.Request.ClientIP = c.RemoteAddr().String()
+				fmt.Println(log.ToText())
 				return nil, nil, err
 			}
 		}
@@ -309,7 +316,9 @@ func ReadFullHttpMessage(c net.Conn) (string, error) {
 		max_body_len, err = strconv.Atoi(content_length)
 
 		if err != nil {
-			log.Println("Error while parsing content-length: ", err)
+			log := logger.NewRequestLog(logger.HTTP_PARSER, logger.ERROR, logger.REQ_READING_ERROR, "Error while reading content-length")
+			log.Request.ClientIP = c.RemoteAddr().String()
+			fmt.Println(log.ToText())
 			return "", err
 		}
 	}
@@ -322,16 +331,22 @@ func ReadFullHttpMessage(c net.Conn) (string, error) {
 
 		// EOF
 		if n == 0 && !keepAlive {
-			log.Println("Client disconnected before full body")
+			log := logger.NewRequestLog(logger.HTTP_PARSER, logger.ERROR, logger.REQ_READING_ERROR, "Client disconnected before full body")
+			log.Request.ClientIP = c.RemoteAddr().String()
+			fmt.Println(log.ToText())
 			return "", err
 		}
 
 		if err != nil {
 			if errors.Is(err, net.ErrClosed) {
-				log.Println("Client disconnected:", c.RemoteAddr())
+				log := logger.NewRequestLog(logger.HTTP_PARSER, logger.ERROR, logger.REQ_READING_ERROR, "Client disconnected")
+				log.Request.ClientIP = c.RemoteAddr().String()
+				fmt.Println(log.ToText())
 				return "", err
 			} else {
-				log.Println("Error while reading client socket: ", err)
+				log := logger.NewRequestLog(logger.HTTP_PARSER, logger.ERROR, logger.REQ_READING_ERROR, "Error while reading client socket")
+				log.Request.ClientIP = c.RemoteAddr().String()
+				fmt.Println(log.ToText())
 				return "", err
 			}
 		}
@@ -343,11 +358,16 @@ func ReadFullHttpMessage(c net.Conn) (string, error) {
 	n, err := req_buf.Write(body_buf.Bytes())
 
 	if n < max_body_len {
-		log.Println("Truncated")
+		log := logger.NewRequestLog(logger.HTTP_PARSER, logger.ERROR, logger.REQ_READING_ERROR, "Truncated Body")
+		log.Request.ClientIP = c.RemoteAddr().String()
+		fmt.Println(log.ToText())
+		return "", err
 	}
 
 	if err != nil {
-		log.Println("Error while assembling request: ", err)
+		log := logger.NewRequestLog(logger.HTTP_PARSER, logger.ERROR, logger.REQ_READING_ERROR, "Error while assembling message")
+		log.Request.ClientIP = c.RemoteAddr().String()
+		fmt.Println(log.ToText())
 		return "", err
 	}
 

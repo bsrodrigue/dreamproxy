@@ -5,6 +5,7 @@ import (
 	http_client "dreamproxy/http/client"
 	http_common "dreamproxy/http/common"
 	"dreamproxy/http/parser"
+	"dreamproxy/logger"
 	"dreamproxy/mime"
 	"fmt"
 	"log"
@@ -14,6 +15,9 @@ import (
 	"os"
 	"path"
 	"strings"
+	"time"
+
+	"github.com/google/uuid"
 )
 
 const PROTOCOL string = "tcp4"
@@ -44,51 +48,94 @@ func main() {
 	}
 }
 
-func CreateBadRequestRes() *http_common.HttpRes {
+func NewFailedToParseRes(remoteAddr string, msg string) *http_common.HttpRes {
 	res := http_common.CreateHttpRes()
-	res.Version = http_common.V1_1
 	res.Status = http_common.StatusBadRequest
 
-	res.SetServerHeaders()
+	log := logger.NewRequestLog(logger.DREAM_SERVER, logger.ERROR, logger.REQ_PARSE_ERROR, msg)
+	log.Request.ClientIP = remoteAddr
 
+	// Create a log handler
+	fmt.Println(log.ToText())
+	return res
+}
+
+func NewBadRequestRes(req http_common.HttpReq, remoteAddr string, err error) *http_common.HttpRes {
+	res := http_common.CreateHttpRes()
+	res.Status = http_common.StatusBadRequest
+
+	log := logger.NewRequestLog(logger.DREAM_SERVER, logger.ERROR, logger.BAD_REQUEST, err.Error())
+	log.Request.ID = uuid.New().String()
+	log.Request.Method = req.Method
+	log.Request.Path = req.Target
+	log.Request.ClientIP = remoteAddr
+	log.Response.StatusCode = int(res.Status)
+	log.Response.BytesSent = 0
+
+	// Create a log handler
+	fmt.Println(log.ToText())
 	return res
 }
 
 // Create a ClientSession struct to handle each connection in a cleaner way
-func handleConn(c net.Conn) {
-	defer c.Close()
+func handleConn(connection net.Conn) {
+	defer connection.Close()
 
 	for {
-		req_raw, err := http_parser.ReadFullHttpMessage(c)
+		req_start := time.Now()
+		req_raw, err := http_parser.ReadFullHttpMessage(connection)
 
 		if err != nil {
-			log.Println(err)
-			res := CreateBadRequestRes()
-			c.Write([]byte(res.ToStr()))
+			res := NewFailedToParseRes(connection.RemoteAddr().String(), err.Error())
+			res.Version = http_common.V1_1
+			res.SetServerHeaders()
+			connection.Write([]byte(res.ToStr()))
 			return
 		}
 
 		req, err := http_parser.ParseRawHttpReq(req_raw)
 
 		if err != nil {
-			log.Println(err)
-			res := CreateBadRequestRes()
-			c.Write([]byte(res.ToStr()))
+			res := NewFailedToParseRes(connection.RemoteAddr().String(), err.Error())
+			res.Version = http_common.V1_1
+			res.SetServerHeaders()
+			connection.Write([]byte(res.ToStr()))
 			return
 		}
 
-		req.Headers["x-forwarded-for"] = c.RemoteAddr().String()
+		//------------- Request has been successfully parsed by now
+
+		req.Headers["x-forwarded-for"] = connection.RemoteAddr().String()
 		res, err := handleRequest(req)
 
 		if err != nil {
-			log.Println(err)
-			res := CreateBadRequestRes()
-			c.Write([]byte(res.ToStr()))
+			res := NewBadRequestRes(*req, connection.RemoteAddr().String(), err)
+			connection.Write([]byte(res.ToStr()))
 			return
 		}
 
-		res.SetServerHeaders() // Add final headers
-		c.Write([]byte(res.ToStr()))
+		// Add final headers
+		res.Version = http_common.V1_1
+		res.SetServerHeaders()
+
+		res_bytes := res.ToBytes()
+
+		latency := time.Since(req_start)
+		connection.Write(res_bytes)
+
+		log := logger.NewRequestLog(logger.DREAM_SERVER, logger.INFO, logger.REQUEST, "")
+		log.Request.ID = uuid.New().String()
+		log.Request.Method = req.Method
+		log.Request.Path = req.Target
+		log.Request.Host = req.Headers["host"]
+		log.Request.ClientIP = connection.RemoteAddr().String()
+		log.Response.StatusCode = int(res.Status)
+		log.Response.BytesSent = int64(len(res_bytes))
+		log.Response.LatencyMS = latency.Milliseconds()
+		log.Response.StatusCode = int(res.Status)
+
+		// Create a log handler
+		fmt.Println(log.ToText())
 
 		// Check keep-alive
 		if strings.ToLower(res.Headers["connection"]) != "keep-alive" {
@@ -169,7 +216,6 @@ func handleGet(target_url *url.URL, res *http_common.HttpRes) error {
 		not_found_page, err := file_system.LoadFile(path.Join(ROOT_FS, "not_found.html"))
 
 		if err != nil {
-			log.Println(err)
 			not_found_page = []byte("<h1>404 Not Found</h1>")
 		}
 
@@ -211,7 +257,7 @@ func handleRequest(req *http_common.HttpReq) (*http_common.HttpRes, error) {
 	if err != nil {
 		log.Println("Invalid URL:", err)
 		res.Status = http_common.StatusBadRequest
-		return CreateBadRequestRes(), err
+		return nil, err
 	}
 
 	target_url.Path = path.Clean(target_url.Path)
@@ -225,7 +271,7 @@ func handleRequest(req *http_common.HttpReq) (*http_common.HttpRes, error) {
 		})
 
 		if err != nil {
-			return CreateBadRequestRes(), err
+			return nil, err
 		}
 
 		if res.Status == http_common.StatusMovedPermanently || res.Status == http_common.StatusFound {
@@ -237,7 +283,7 @@ func handleRequest(req *http_common.HttpReq) (*http_common.HttpRes, error) {
 			})
 
 			if err != nil {
-				return CreateBadRequestRes(), err
+				return nil, err
 			}
 
 		}
@@ -252,7 +298,7 @@ func handleRequest(req *http_common.HttpReq) (*http_common.HttpRes, error) {
 			handleGet(target_url, res)
 			break
 		default:
-			return CreateBadRequestRes(), err
+			return nil, err
 		}
 	}
 

@@ -1,7 +1,6 @@
 package http_common
 
 import (
-	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -108,6 +107,10 @@ func (res *HttpRes) SetReverseProxyHeaders() {
 
 }
 
+func (res *HttpRes) ToBytes() []byte {
+	return []byte(res.ToStr())
+}
+
 func (res *HttpRes) ToStr() string {
 	var sb strings.Builder
 
@@ -133,7 +136,6 @@ func (res *HttpRes) ToStr() string {
 
 	sb.WriteString("\r\n")
 
-	log.Println(len(res.Body))
 	// Body
 	sb.Write(res.Body)
 
