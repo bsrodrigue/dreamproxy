@@ -1,4 +1,4 @@
----
+# DreamServer
 
 **DreamServer** is a lightweight HTTP reverse proxy and static file server written from scratch in Go.
 It is designed as an educational exploration into networking, HTTP parsing, and proxying internals—while keeping a clear path toward production-ready use.
@@ -127,4 +127,3 @@ This project is still under active development, and ideas for features or improv
 MIT License. See [LICENSE](LICENSE) for details.
 
 ---
-
