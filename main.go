@@ -3,38 +3,41 @@ package main
 import (
 	"dreamproxy/config"
 	"dreamproxy/dream"
-	"dreamproxy/logger"
-	"fmt"
-	_ "net/http/pprof"
 	"strconv"
 )
 
-const PORT string = "8080"
-const ROOT_FS string = "staticfiles"
-const LOG_FILE string = "/var/log/dreamserver/access.log"
 const LOG_FORMAT string = "text"
 const CONFIG_FILE string = "./Dreamfile"
 
 var dreamconfig config.Config
 
-func WriteLog(log logger.RequestLog) {
-	if LOG_FORMAT == "text" {
-		fmt.Println(log.ToText())
-
-	}
-}
-
 func main() {
 	ctxts := []dream.DreamContext{}
 	dreamconfig = config.LoadDreamFile(CONFIG_FILE)
 
+	config_map := map[string][]config.Server{}
+
+	// Map each server configuration to a unique port
 	for _, server_config := range dreamconfig.Servers {
-		ctxt := dream.NewDreamContext(strconv.Itoa(server_config.Listen.Port), []config.Server{})
+		port_str := strconv.Itoa(server_config.Listen.Port)
+		if config_map[port_str] == nil {
+			config_map[port_str] = make([]config.Server, 0, 10)
+		}
+
+		config_map[port_str] = append(config_map[port_str], server_config)
+	}
+
+	for port_str, server_configs := range config_map {
+		ctxt := dream.NewDreamContext(port_str, server_configs)
 		ctxts = append(ctxts, ctxt)
 	}
 
 	// Server Loop
 	for _, ctxt := range ctxts {
-		ctxt.RunDreamContext()
+		go ctxt.RunDreamContext()
+	}
+
+	for {
+		// Keep main alive
 	}
 }

@@ -106,7 +106,7 @@ func (session *ClientSession) HandleConnection(server_configs []config.Server) {
 		fmt.Println(log.ToText())
 
 		// Check keep-alive
-		if strings.ToLower(res.Headers["connection"]) != "keep-alive" {
+		if strings.ToLower(res.Headers["connection"]) == "close" {
 			return
 		}
 	}
