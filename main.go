@@ -1,6 +1,8 @@
 package main
 
 import (
+	config_parser "dreamproxy/config/parser"
+	config "dreamproxy/config/server"
 	"dreamproxy/file_system"
 	http_client "dreamproxy/http/client"
 	http_common "dreamproxy/http/common"
@@ -14,6 +16,9 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"path/filepath"
+	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -24,8 +29,48 @@ const PROTOCOL string = "tcp4"
 const PORT string = "8080"
 const ROOT_FS string = "staticfiles"
 const LOG_FILE string = "/var/log/dreamserver/access.log"
+const LOG_FORMAT string = "text"
+const CONFIG_FILE string = "./Dreamfile"
+
+var dreamconfig config.Config
+
+func LoadDreamFile() config.Config {
+	data, err := os.ReadFile(CONFIG_FILE)
+
+	if err != nil {
+		panic(err)
+	}
+
+	lexer := config_parser.NewLexer(string(data))
+
+	var tokens []config_parser.Token
+
+	for {
+		token := lexer.NextToken()
+		tokens = append(tokens, token)
+
+		if token.Type == config_parser.TokenEOF {
+			break
+		}
+	}
+
+	parser := config_parser.NewParser(tokens)
+
+	cfg := parser.ParseConfig()
+
+	return cfg
+}
+
+func WriteLog(log logger.RequestLog) {
+	if LOG_FORMAT == "text" {
+		fmt.Println(log.ToText())
+
+	}
+
+}
 
 func main() {
+	dreamconfig = LoadDreamFile()
 	ln, err := net.Listen(PROTOCOL, fmt.Sprintf(":%s", PORT))
 
 	if err != nil {
@@ -131,7 +176,7 @@ func handleConn(connection net.Conn) {
 		log.Request.Host = req.Headers["host"]
 		log.Request.ClientIP = connection.RemoteAddr().String()
 		log.Response.StatusCode = int(res.Status)
-		log.Response.BytesSent = int64(len(res_bytes))
+		log.Response.BytesSent = int64(len(res.Body))
 		log.Response.LatencyMS = latency.Milliseconds()
 		log.Response.StatusCode = int(res.Status)
 
@@ -145,32 +190,40 @@ func handleConn(connection net.Conn) {
 	}
 }
 
-func handleHead(target_url *url.URL, res *http_common.HttpRes) error {
-	// Write a static file finder (resolver)
+func ResolveFilePath(target_url string, root_fs string) (string, os.FileInfo, error) {
 	var err error
 	var file_path string
-	ext := path.Ext(target_url.Path)
+	ext := path.Ext(target_url)
 	ext = strings.ToLower(ext)
 
 	// Page URLs
 	if ext == "" {
-		res.Headers["content-type"] = mime.MimeTypes[".html"]
-		file_path = path.Join(ROOT_FS, target_url.Path)
+		file_path = path.Join(root_fs, target_url)
 
 		// Is Root
-		if target_url.Path == "/" {
-			file_path = path.Join(ROOT_FS, "index.html")
+		if target_url == "/" {
+			file_path = path.Join(root_fs, "index.html")
 		}
 
 	} else { // Resource URLs
-		res.Headers["content-type"] = mime.MimeTypes[ext]
-		if res.Headers["content-type"] == "" {
-			res.Headers["content-type"] = "application/octet-stream"
-		}
-		file_path = path.Join(ROOT_FS, target_url.Path)
+		file_path = path.Join(root_fs, target_url)
 	}
 
 	stat, err := os.Stat(file_path)
+
+	return file_path, stat, err
+}
+
+func handleHead(target_url string, res *http_common.HttpRes, root_fs string) error {
+	file_path, stat, err := ResolveFilePath(target_url, root_fs)
+
+	ext := filepath.Ext(file_path)
+
+	content_type := mime.MimeTypes[ext]
+
+	if content_type == "" {
+		content_type = "application/octet-stream"
+	}
 
 	if err != nil {
 		log.Println(err)
@@ -178,40 +231,28 @@ func handleHead(target_url *url.URL, res *http_common.HttpRes) error {
 		res.Headers["content-length"] = "0"
 	} else {
 		res.Status = http_common.StatusOK
+		res.Headers["content-type"] = content_type
 		res.Headers["content-length"] = fmt.Sprint(stat.Size())
 	}
 
 	return err
 }
 
-func handleGet(target_url *url.URL, res *http_common.HttpRes) error {
+func handleGet(target_url string, res *http_common.HttpRes, root_fs string) error {
 	var res_body []byte
 	var err error
-	ext := path.Ext(target_url.Path)
-	ext = strings.ToLower(ext)
 
-	// Page URLs
-	if ext == "" {
-		res.Headers["Content-Type"] = mime.MimeTypes[".html"]
-		file_path := path.Join(ROOT_FS, target_url.Path)
+	file_path, _, err := ResolveFilePath(target_url, root_fs)
 
-		// Is Root
-		if target_url.Path == "/" {
-			file_path = path.Join(ROOT_FS, "index.html")
-		}
+	ext := filepath.Ext(file_path)
 
-		res_body, err = file_system.LoadFile(file_path)
+	content_type := mime.MimeTypes[ext]
 
-	} else { // Resource URLs
-		res.Headers["Content-Type"] = mime.MimeTypes[ext]
-
-		if res.Headers["content-type"] == "" {
-			res.Headers["content-type"] = "application/octet-stream"
-		}
-		file_path := path.Join(ROOT_FS, target_url.Path)
-		res_body, err = file_system.LoadFile(file_path)
+	if content_type == "" {
+		content_type = "application/octet-stream"
 	}
 
+	res_body, err = file_system.LoadFile(file_path)
 	if err != nil {
 		not_found_page, err := file_system.LoadFile(path.Join(ROOT_FS, "not_found.html"))
 
@@ -262,44 +303,89 @@ func handleRequest(req *http_common.HttpReq) (*http_common.HttpRes, error) {
 
 	target_url.Path = path.Clean(target_url.Path)
 
-	// Check if Proxy
-	if host == "djangoserver.com:8080" {
+	// Handle Configs
+	for _, server_cfg := range dreamconfig.Servers {
 
-		res, err = http_client.MakeRequest(req.Method, "djangoserver.com", 8000, target_url.Path, http_client.RequestConfig{
-			Headers: req.Headers,
-			Body:    req.Body,
-		})
+		if host == server_cfg.Name || slices.Contains(server_cfg.Hosts, host) {
 
-		if err != nil {
-			return nil, err
-		}
-
-		if res.Status == http_common.StatusMovedPermanently || res.Status == http_common.StatusFound {
-			location := res.Headers["location"]
-
-			res, err = http_client.MakeRequest(req.Method, "djangoserver.com", 8000, location, http_client.RequestConfig{
-				Headers: req.Headers,
-				Body:    req.Body,
-			})
-
-			if err != nil {
-				return nil, err
+			// Check if port is part of host
+			if strings.Contains(host, ":") {
+				host = strings.SplitN(host, ":", 2)[0]
 			}
 
+			// Check if Proxy
+			for _, location := range server_cfg.Locations {
+
+				// Does not support globbing yet
+				if !strings.HasPrefix(target_url.Path, path.Clean(location.Path)) {
+					continue
+				}
+
+				if location.ProxyPass != "" {
+					origin_server := location.ProxyPass
+					origin_host := ""
+					origin_port_str := ""
+
+					if strings.Contains(origin_server, "://") {
+						scheme_host := strings.SplitN(origin_server, "://", 2)
+
+						origin_host = scheme_host[1]
+
+						if strings.Contains(origin_host, ":") {
+							origin_host_port := strings.SplitN(origin_host, ":", 2)
+							origin_host = origin_host_port[0]
+							origin_port_str = origin_host_port[1]
+						}
+					}
+
+					origin_port, err := strconv.Atoi(origin_port_str)
+
+					if err != nil {
+						continue
+					}
+
+					res, err = http_client.MakeRequest(req.Method, origin_host, origin_port, target_url.Path, http_client.RequestConfig{
+						Headers: req.Headers,
+						Body:    req.Body,
+					})
+
+					if err != nil {
+						return nil, err
+					}
+
+					if res.Status == http_common.StatusMovedPermanently || res.Status == http_common.StatusFound {
+						location := res.Headers["location"]
+
+						res, err = http_client.MakeRequest(req.Method, origin_host, origin_port, location, http_client.RequestConfig{
+							Headers: req.Headers,
+							Body:    req.Body,
+						})
+
+						if err != nil {
+							return nil, err
+						}
+					}
+				} else {
+
+					// Static File Server
+					switch method {
+					case "HEAD":
+						handleHead(target_url.Path, res, location.Root)
+						break
+					case "GET":
+						handleGet(target_url.Path, res, location.Root)
+						break
+					default:
+						return nil, err
+					}
+				}
+
+			}
+
+			return res, nil
 		}
 
-		return res, nil
-	} else {
-		switch method {
-		case "HEAD":
-			handleHead(target_url, res)
-			break
-		case "GET":
-			handleGet(target_url, res)
-			break
-		default:
-			return nil, err
-		}
+		continue
 	}
 
 	return res, nil

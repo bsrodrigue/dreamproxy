@@ -1,0 +1,27 @@
+servers {
+  server {
+    name djangoserver.com:8080
+    listen 8080
+    hosts djangoserver.com:8080
+    access_log /var/log/dreamserver/requests.log
+
+    location /static/ {
+      root /var/www/static
+    }
+
+    location / {
+      proxy_pass http://localhost:8000
+    }
+  }
+
+  server {
+    name localhost:8080
+    listen 8080
+    access_log /var/log/dreamserver/requests.log
+
+    location / {
+      root /var/www/static
+    }
+  }
+}
+

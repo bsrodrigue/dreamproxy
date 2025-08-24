@@ -19,7 +19,9 @@ func PreprocessCfg(cfg RequestConfig, host string, path string) RequestConfig {
 		cfg.Headers = make(map[string]string)
 	}
 
-	cfg.Headers["host"] = host
+	if cfg.Headers["host"] == "" {
+		cfg.Headers["host"] = host
+	}
 
 	if strings.HasSuffix(path, "/") {
 		path = strings.TrimSuffix(path, "/") // In case path has a trailing slash
