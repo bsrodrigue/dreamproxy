@@ -1,7 +1,6 @@
-package config_parser
+package config
 
 import (
-	config "dreamproxy/config/server"
 	"fmt"
 	"strconv"
 	"strings"
@@ -107,8 +106,8 @@ func (p *Parser) expectSymbol(val string) {
 	}
 }
 
-func (p *Parser) ParseConfig() config.Config {
-	cfg := config.Config{}
+func (p *Parser) ParseConfig() Config {
+	cfg := Config{}
 
 	// Expect "servers" identifier
 	serversTok := p.consume()
@@ -128,8 +127,8 @@ func (p *Parser) ParseConfig() config.Config {
 	return cfg
 }
 
-func (p *Parser) parseServer() config.Server {
-	server := config.Server{}
+func (p *Parser) parseServer() Server {
+	server := Server{}
 
 	// Expect "server" identifier
 	serverTok := p.consume()
@@ -154,8 +153,8 @@ func (p *Parser) parseServer() config.Server {
 	return server
 }
 
-func (p *Parser) parseLocation() config.Location {
-	loc := config.Location{}
+func (p *Parser) parseLocation() Location {
+	loc := Location{}
 	p.consume() // consume 'location'
 	pathTok := p.consume()
 	if pathTok.Type != TokenIdentifier {
@@ -205,14 +204,14 @@ func (p *Parser) parseDirective() (string, string) {
 	return keyTok.Value, valTok.Value
 }
 
-func (p *Parser) applyDirective(s *config.Server, key, value string) {
+func (p *Parser) applyDirective(s *Server, key, value string) {
 	switch key {
 	case "name":
 		s.Name = value
 	case "listen":
 		port, _ := strconv.Atoi(value)
 		if s.Listen.Port == 0 {
-			s.Listen = config.Listen{Port: port, SSL: false}
+			s.Listen = Listen{Port: port, SSL: false}
 		} else {
 			s.Listen.Port = port
 		}
@@ -224,12 +223,12 @@ func (p *Parser) applyDirective(s *config.Server, key, value string) {
 		s.AccessLog = value
 	case "ssl_certificate":
 		if s.SSL == nil {
-			s.SSL = &config.SSLConfig{}
+			s.SSL = &SSLConfig{}
 		}
 		s.SSL.Certificate = value
 	case "ssl_certificate_key":
 		if s.SSL == nil {
-			s.SSL = &config.SSLConfig{}
+			s.SSL = &SSLConfig{}
 		}
 		s.SSL.CertificateKey = value
 	default:

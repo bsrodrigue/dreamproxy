@@ -1,4 +1,4 @@
-package http_common
+package http
 
 import (
 	"strconv"

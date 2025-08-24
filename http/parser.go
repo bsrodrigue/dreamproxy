@@ -1,8 +1,7 @@
-package http_parser
+package http
 
 import (
 	"bytes"
-	"dreamproxy/http/common"
 	"dreamproxy/logger"
 	"errors"
 	"fmt"
@@ -21,7 +20,7 @@ import (
 // <header>:<value>\r\n\r\n
 // <body>
 
-func ParseRawHttpReq(raw_http string) (*http_common.HttpReq, error) {
+func ParseRawHttpReq(raw_http string) (*HttpReq, error) {
 	portions := strings.SplitN(raw_http, "\r\n", 2)
 
 	if len(portions) != 2 {
@@ -49,7 +48,7 @@ func ParseRawHttpReq(raw_http string) (*http_common.HttpReq, error) {
 	raw_target := strings.TrimSpace(request_line_parts[1])
 	raw_version := strings.TrimSpace(request_line_parts[2])
 
-	if !slices.Contains(http_common.HTTP_METHODS, raw_method) {
+	if !slices.Contains(HTTP_METHODS, raw_method) {
 		return nil, fmt.Errorf("invalid HTTP method")
 	}
 
@@ -70,7 +69,7 @@ func ParseRawHttpReq(raw_http string) (*http_common.HttpReq, error) {
 
 	version_number := version_split[1]
 
-	if !http_common.IsValidHTTPVersion(version_number) {
+	if !IsValidHTTPVersion(version_number) {
 		return nil, fmt.Errorf("invalid HTTP version:%s", version_number)
 	}
 
@@ -85,7 +84,7 @@ func ParseRawHttpReq(raw_http string) (*http_common.HttpReq, error) {
 		raw_body = rest[1]
 	}
 
-	return &http_common.HttpReq{
+	return &HttpReq{
 		Scheme:  "http",
 		Method:  raw_method,
 		Target:  raw_target,
@@ -102,7 +101,7 @@ func ParseRawHttpReq(raw_http string) (*http_common.HttpReq, error) {
 // <header>:<value>\r\n\r\n
 // <body>
 
-func ParseRawHttpRes(raw_http string) (*http_common.HttpRes, error) {
+func ParseRawHttpRes(raw_http string) (*HttpRes, error) {
 
 	portions := strings.SplitN(raw_http, "\r\n", 2)
 
@@ -143,7 +142,7 @@ func ParseRawHttpRes(raw_http string) (*http_common.HttpRes, error) {
 	}
 	version_number := version_split[1]
 
-	if !http_common.IsValidHTTPVersion(version_number) {
+	if !IsValidHTTPVersion(version_number) {
 		return nil, fmt.Errorf("invalid HTTP version: %s", version_number)
 	}
 
@@ -162,9 +161,9 @@ func ParseRawHttpRes(raw_http string) (*http_common.HttpRes, error) {
 		raw_body = rest[1]
 	}
 
-	return &http_common.HttpRes{
-		Status:  http_common.StatusCode(status_code),
-		Version: http_common.HttpVersion(version_number),
+	return &HttpRes{
+		Status:  StatusCode(status_code),
+		Version: HttpVersion(version_number),
 		Headers: headers,
 		Body:    []byte(raw_body),
 	}, nil

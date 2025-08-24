@@ -1,7 +1,6 @@
-package http_parser
+package http
 
 import (
-	http_common "dreamproxy/http/common"
 	"strings"
 	"testing"
 )
@@ -11,7 +10,7 @@ func TestParseRawHttp(t *testing.T) {
 		name      string
 		raw       string
 		wantErr   bool
-		checkFunc func(req *http_common.HttpReq, res *http_common.HttpRes) // only one of req or res will be non-nil
+		checkFunc func(req *HttpReq, res *HttpRes) // only one of req or res will be non-nil
 		isReq     bool
 	}{
 		// ==== Request Line ====
@@ -31,7 +30,7 @@ func TestParseRawHttp(t *testing.T) {
 			name:  "Extra spaces in request line",
 			raw:   "GET   /   HTTP/1.1\r\nHost: example.com\r\n\r\n",
 			isReq: true,
-			checkFunc: func(req *http_common.HttpReq, _ *http_common.HttpRes) {
+			checkFunc: func(req *HttpReq, _ *HttpRes) {
 				if req.Method != "GET" || req.Target != "/" || req.Version != "1.1" {
 					t.Errorf("Failed to parse request line with extra spaces")
 				}
@@ -41,7 +40,7 @@ func TestParseRawHttp(t *testing.T) {
 			name:  "Absolute-form target",
 			raw:   "GET http://example.com/path HTTP/1.1\r\n\r\n",
 			isReq: true,
-			checkFunc: func(req *http_common.HttpReq, _ *http_common.HttpRes) {
+			checkFunc: func(req *HttpReq, _ *HttpRes) {
 				if req.Target != "http://example.com/path" {
 					t.Errorf("Failed to parse absolute-form target")
 				}
@@ -51,7 +50,7 @@ func TestParseRawHttp(t *testing.T) {
 			name:  "Asterisk-form target",
 			raw:   "OPTIONS * HTTP/1.1\r\n\r\n",
 			isReq: true,
-			checkFunc: func(req *http_common.HttpReq, _ *http_common.HttpRes) {
+			checkFunc: func(req *HttpReq, _ *HttpRes) {
 				if req.Target != "*" {
 					t.Errorf("Failed to parse asterisk-form target")
 				}
@@ -61,7 +60,7 @@ func TestParseRawHttp(t *testing.T) {
 			name:  "Authority-form target",
 			raw:   "CONNECT example.com:443 HTTP/1.1\r\n\r\n",
 			isReq: true,
-			checkFunc: func(req *http_common.HttpReq, _ *http_common.HttpRes) {
+			checkFunc: func(req *HttpReq, _ *HttpRes) {
 				if req.Target != "example.com:443" {
 					t.Errorf("Failed to parse authority-form target")
 				}
@@ -78,7 +77,7 @@ func TestParseRawHttp(t *testing.T) {
 			name:  "Header with multiple colons",
 			raw:   "GET / HTTP/1.1\r\nAuth: user:pass\r\n\r\n",
 			isReq: true,
-			checkFunc: func(req *http_common.HttpReq, _ *http_common.HttpRes) {
+			checkFunc: func(req *HttpReq, _ *HttpRes) {
 				if req.Headers["auth"] != "user:pass" {
 					t.Errorf("Failed to parse header with multiple colons")
 				}
@@ -88,7 +87,7 @@ func TestParseRawHttp(t *testing.T) {
 			name:  "Header extra whitespace",
 			raw:   "GET / HTTP/1.1\r\nHost:   example.com   \r\n\r\n",
 			isReq: true,
-			checkFunc: func(req *http_common.HttpReq, _ *http_common.HttpRes) {
+			checkFunc: func(req *HttpReq, _ *HttpRes) {
 				if req.Headers["host"] != "example.com" {
 					t.Errorf("Failed to trim header whitespace")
 				}
@@ -99,7 +98,7 @@ func TestParseRawHttp(t *testing.T) {
 			name:  "Request with body",
 			raw:   "POST /submit HTTP/1.1\r\nContent-Length: 29\r\n\r\nfield1=value1&field2=value2",
 			isReq: true,
-			checkFunc: func(req *http_common.HttpReq, _ *http_common.HttpRes) {
+			checkFunc: func(req *HttpReq, _ *HttpRes) {
 				if string(req.Body) != "field1=value1&field2=value2" {
 					t.Errorf("Body parsing failed")
 				}
@@ -116,7 +115,7 @@ func TestParseRawHttp(t *testing.T) {
 			name:  "Res with body",
 			raw:   "HTTP/1.1 200 OK\r\nContent-Length: 14\r\n\r\n<html>OK</html>",
 			isReq: false,
-			checkFunc: func(_ *http_common.HttpReq, res *http_common.HttpRes) {
+			checkFunc: func(_ *HttpReq, res *HttpRes) {
 				if string(res.Body) != "<html>OK</html>" {
 					t.Errorf("Res body not parsed correctly")
 				}
@@ -126,7 +125,7 @@ func TestParseRawHttp(t *testing.T) {
 			name:  "Malformed response header",
 			raw:   "HTTP/1.1 200 OK\r\nContent-Type text/html\r\n\r\n",
 			isReq: false,
-			checkFunc: func(_ *http_common.HttpReq, res *http_common.HttpRes) {
+			checkFunc: func(_ *HttpReq, res *HttpRes) {
 				if len(res.Headers) != 0 {
 					t.Errorf("Malformed headers should be ignored")
 				}
@@ -224,12 +223,12 @@ func TestHTTPParserEdgeCases(t *testing.T) {
 func TestHttpReq_ToStr(t *testing.T) {
 	tests := []struct {
 		name   string
-		req    http_common.HttpReq
+		req    HttpReq
 		expect string
 	}{
 		{
 			name: "Simple GET request",
-			req: http_common.HttpReq{
+			req: HttpReq{
 				Method:  "GET",
 				Target:  "/",
 				Version: "1.1",
@@ -240,7 +239,7 @@ func TestHttpReq_ToStr(t *testing.T) {
 		},
 		{
 			name: "POST with body",
-			req: http_common.HttpReq{
+			req: HttpReq{
 				Method:  "POST",
 				Target:  "/submit",
 				Version: "1.1",
@@ -270,13 +269,13 @@ func TestHttpReq_ToStr(t *testing.T) {
 func TestHttpRes_ToStr(t *testing.T) {
 	tests := []struct {
 		name string
-		res  http_common.HttpRes
+		res  HttpRes
 	}{
 		{
 			name: "200 OK with body",
-			res: http_common.HttpRes{
-				Version: http_common.V1_1,
-				Status:  http_common.StatusOK,
+			res: HttpRes{
+				Version: V1_1,
+				Status:  StatusOK,
 				Headers: map[string]string{
 					"Content-Type":   "text/plain",
 					"Content-Length": "5",
@@ -286,9 +285,9 @@ func TestHttpRes_ToStr(t *testing.T) {
 		},
 		{
 			name: "404 Not Found no body",
-			res: http_common.HttpRes{
-				Version: http_common.V1_1,
-				Status:  http_common.StatusNotFound,
+			res: HttpRes{
+				Version: V1_1,
+				Status:  StatusNotFound,
 				Headers: map[string]string{},
 				Body:    nil,
 			},

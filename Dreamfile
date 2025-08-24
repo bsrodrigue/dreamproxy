@@ -23,5 +23,15 @@ servers {
       root /var/www/static
     }
   }
+
+  server {
+    name landingpage.com:8080
+    listen 8080
+    access_log /var/log/dreamserver/requests.log
+
+    location / {
+      root /var/www/static/landing_page
+    }
+  }
 }
 

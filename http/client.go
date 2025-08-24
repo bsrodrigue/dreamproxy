@@ -1,8 +1,6 @@
-package http_client
+package http
 
 import (
-	http_common "dreamproxy/http/common"
-	http_parser "dreamproxy/http/parser"
 	"fmt"
 	"net"
 	"strings"
@@ -50,7 +48,7 @@ func PreprocessCfg(cfg RequestConfig, host string, path string) RequestConfig {
 	return cfg
 }
 
-func HandleRequest(req http_common.HttpReq, host string, port int) (*http_common.HttpRes, error) {
+func HandleRequest(req HttpReq, host string, port int) (*HttpRes, error) {
 	connection, err := net.Dial("tcp4", net.JoinHostPort(host, fmt.Sprint(port)))
 
 	if err != nil {
@@ -75,13 +73,13 @@ func HandleRequest(req http_common.HttpReq, host string, port int) (*http_common
 		written_bytes += n
 	}
 
-	res_str, err := http_parser.ReadFullHttpMessage(connection)
+	res_str, err := ReadFullHttpMessage(connection)
 
 	if err != nil {
 		return nil, err
 	}
 
-	res, err := http_parser.ParseRawHttpRes(res_str)
+	res, err := ParseRawHttpRes(res_str)
 
 	if err != nil {
 		return nil, err
@@ -90,11 +88,11 @@ func HandleRequest(req http_common.HttpReq, host string, port int) (*http_common
 	return res, nil
 }
 
-func MakeRequest(method string, host string, port int, path string, cfg RequestConfig) (*http_common.HttpRes, error) {
+func MakeRequest(method string, host string, port int, path string, cfg RequestConfig) (*HttpRes, error) {
 	cfg = PreprocessCfg(cfg, host, path)
 
-	req := http_common.HttpReq{
-		Version: string(http_common.V1_1), // Make configurable
+	req := HttpReq{
+		Version: string(V1_1), // Make configurable
 		Method:  strings.ToUpper(method),
 		Scheme:  "http",
 		Target:  path,
@@ -105,30 +103,30 @@ func MakeRequest(method string, host string, port int, path string, cfg RequestC
 	return HandleRequest(req, host, port)
 }
 
-func Get(host string, port int, path string, cfg RequestConfig) (*http_common.HttpRes, error) {
+func Get(host string, port int, path string, cfg RequestConfig) (*HttpRes, error) {
 	return MakeRequest("GET", host, port, path, cfg)
 }
 
-func Post(host string, port int, path string, cfg RequestConfig) (*http_common.HttpRes, error) {
+func Post(host string, port int, path string, cfg RequestConfig) (*HttpRes, error) {
 	return MakeRequest("POST", host, port, path, cfg)
 }
 
-func Put(host string, port int, path string, cfg RequestConfig) (*http_common.HttpRes, error) {
+func Put(host string, port int, path string, cfg RequestConfig) (*HttpRes, error) {
 	return MakeRequest("PUT", host, port, path, cfg)
 }
 
-func Patch(host string, port int, path string, cfg RequestConfig) (*http_common.HttpRes, error) {
+func Patch(host string, port int, path string, cfg RequestConfig) (*HttpRes, error) {
 	return MakeRequest("PATCH", host, port, path, cfg)
 }
 
-func Delete(host string, port int, path string, cfg RequestConfig) (*http_common.HttpRes, error) {
+func Delete(host string, port int, path string, cfg RequestConfig) (*HttpRes, error) {
 	return MakeRequest("DELETE", host, port, path, cfg)
 }
 
-func Head(host string, port int, path string, cfg RequestConfig) (*http_common.HttpRes, error) {
+func Head(host string, port int, path string, cfg RequestConfig) (*HttpRes, error) {
 	return MakeRequest("HEAD", host, port, path, cfg)
 }
 
-func Options(host string, port int, path string, cfg RequestConfig) (*http_common.HttpRes, error) {
+func Options(host string, port int, path string, cfg RequestConfig) (*HttpRes, error) {
 	return MakeRequest("OPTIONS", host, port, path, cfg)
 }
