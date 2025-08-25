@@ -103,7 +103,7 @@ func (session *ClientSession) HandleConnection(server_configs []config.Server) {
 		log.Response.StatusCode = int(res.Status)
 
 		// Create a log handler
-		fmt.Println(log.ToText())
+		// fmt.Println(log.ToText())
 
 		// Check keep-alive
 		if strings.ToLower(res.Headers["connection"]) == "close" {
@@ -207,7 +207,7 @@ func HandleRequest(req *http.HttpReq, server_configs []config.Server) (*http.Htt
 						handleHead(target_url.Path, res, location.Root)
 						break
 					case "GET":
-						handleGet(target_url.Path, res, location.Root)
+						handleGet(target_url.Path, *req, res, location.Root)
 						break
 					default:
 						return nil, err
@@ -249,11 +249,11 @@ func handleHead(target_url string, res *http.HttpRes, root_fs string) error {
 	return err
 }
 
-func handleGet(target_url string, res *http.HttpRes, root_fs string) error {
+func handleGet(target_url string, req http.HttpReq, res *http.HttpRes, root_fs string) error {
 	var res_body []byte
 	var err error
 
-	file_path, _, err := fs.ResolveFilePath(target_url, root_fs)
+	file_path, stat, err := fs.ResolveFilePath(target_url, root_fs)
 
 	ext := filepath.Ext(file_path)
 
@@ -263,27 +263,41 @@ func handleGet(target_url string, res *http.HttpRes, root_fs string) error {
 		content_type = "application/octet-stream"
 	}
 
-	res_body, err = fs.LoadFile(file_path)
 	if err != nil {
-		not_found_page, err := fs.LoadFile(path.Join(root_fs, "not_found.html"))
-
-		if err != nil {
-			not_found_page = []byte("<h1>404 Not Found</h1>")
-		}
-
 		res.Status = http.StatusNotFound
 
-		res.Headers["content-length"] = fmt.Sprint(len(not_found_page))
+		res.Headers["content-length"] = "0"
 		res.Headers["connection"] = "close"
 
-		res.Body = []byte(not_found_page)
+		res.Body = make([]byte, 0)
 
 	} else {
-		res.Status = http.StatusOK
+		if_none_match := req.Headers["if-none-match"]
 
-		res.Headers["content-length"] = fmt.Sprint(len(res_body))
+		// Generate ETag
+		file_size := stat.Size()
+		last_modified := stat.ModTime().Unix()
+		etag := strconv.Itoa(int(file_size) + int(last_modified))
 
-		res.Body = res_body
+		res.Headers["etag"] = etag
+		res.Headers["last-modified"] = stat.ModTime().Format(time.RFC1123)
+
+		if if_none_match == etag {
+			res.Status = http.StatusNotModified
+			res.Headers["content-length"] = "0"
+			res_body = make([]byte, 0)
+		} else {
+			res_body, err = fs.LoadFile(file_path)
+
+			if err != nil {
+				return err
+			}
+
+			res.Status = http.StatusOK
+			res.Headers["content-length"] = fmt.Sprint(len(res_body))
+			res.Body = res_body
+		}
+
 	}
 
 	return err

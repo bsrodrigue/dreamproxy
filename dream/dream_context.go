@@ -41,7 +41,6 @@ func (ctxt *DreamContext) RunDreamContext() {
 }
 
 func NewDreamContext(port string, servers []config.Server) DreamContext {
-
 	return DreamContext{
 		Port:    port,
 		Servers: servers,

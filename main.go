@@ -3,6 +3,9 @@ package main
 import (
 	"dreamproxy/config"
 	"dreamproxy/dream"
+	"log"
+	"net/http"
+	_ "net/http/pprof"
 	"strconv"
 )
 
@@ -12,6 +15,10 @@ const CONFIG_FILE string = "./Dreamfile"
 var dreamconfig config.Config
 
 func main() {
+	go func() {
+		log.Println(http.ListenAndServe("localhost:6060", nil))
+	}()
+
 	ctxts := []dream.DreamContext{}
 	dreamconfig = config.LoadDreamFile(CONFIG_FILE)
 

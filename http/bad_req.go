@@ -2,7 +2,6 @@ package http
 
 import (
 	"dreamproxy/logger"
-	"fmt"
 
 	"github.com/google/uuid"
 )
@@ -15,7 +14,7 @@ func NewFailedToParseRes(remoteAddr string, msg string) *HttpRes {
 	log.Request.ClientIP = remoteAddr
 
 	// Create a log handler
-	fmt.Println(log.ToText())
+	// fmt.Println(log.ToText())
 	return res
 }
 
@@ -32,6 +31,6 @@ func NewBadRequestRes(req HttpReq, remoteAddr string, err error) *HttpRes {
 	log.Response.BytesSent = 0
 
 	// Create a log handler
-	fmt.Println(log.ToText())
+	// fmt.Println(log.ToText())
 	return res
 }

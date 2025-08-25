@@ -165,6 +165,7 @@ const (
 	StatusNoContent           StatusCode = 204
 	StatusMovedPermanently    StatusCode = 301
 	StatusFound               StatusCode = 302
+	StatusNotModified         StatusCode = 304
 	StatusBadRequest          StatusCode = 400
 	StatusUnauthorized        StatusCode = 401
 	StatusForbidden           StatusCode = 403
@@ -185,6 +186,7 @@ var StatusText = map[StatusCode]string{
 	StatusNoContent:           "No Content",
 	StatusMovedPermanently:    "Moved Permanently",
 	StatusFound:               "Found",
+	StatusNotModified:         "Not Modified",
 	StatusBadRequest:          "Bad Request",
 	StatusUnauthorized:        "Unauthorized",
 	StatusForbidden:           "Forbidden",
