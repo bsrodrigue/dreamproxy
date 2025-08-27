@@ -147,7 +147,6 @@ func HandleRequest(req *http.HttpReq, server_configs []config.Server) (*http.Htt
 				host = strings.SplitN(host, ":", 2)[0]
 			}
 
-			// Check if Proxy
 			for _, location := range server_cfg.Locations {
 
 				// Does not support globbing yet
@@ -155,6 +154,7 @@ func HandleRequest(req *http.HttpReq, server_configs []config.Server) (*http.Htt
 					continue
 				}
 
+				// Check if Proxy
 				if location.ProxyPass != "" {
 					origin_server := location.ProxyPass
 					origin_host := ""
@@ -210,6 +210,7 @@ func HandleRequest(req *http.HttpReq, server_configs []config.Server) (*http.Htt
 						handleGet(target_url.Path, *req, res, location.Root)
 						break
 					default:
+						// Method not allowed
 						return nil, err
 					}
 				}
