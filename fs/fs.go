@@ -1,10 +1,11 @@
 package fs
 
 import (
+	"errors"
 	"io"
 	"log"
 	"os"
-	"path"
+	"path/filepath"
 	"strings"
 )
 
@@ -27,23 +28,24 @@ func LoadFile(filepath string) ([]byte, error) {
 	return file_bin, err
 }
 
+// Possible paths:
+// /foo/bar/
+// /foo/bar
+// /foo/bar/file.png
+// /foo/bar/file.css
 func ResolveFilePath(target_path string, root_fs string) (string, os.FileInfo, error) {
 	var err error
 	var file_path string
-	ext := path.Ext(target_path)
-	ext = strings.ToLower(ext)
 
-	// Page URLs
-	if ext == "" {
-		file_path = path.Join(root_fs, target_path)
+	file_path = filepath.Join(root_fs, filepath.Clean(target_path))
 
-		// Is Root
-		if target_path == "/" {
-			file_path = path.Join(root_fs, "index.html")
-		}
+	if !strings.HasPrefix(file_path, root_fs) { // Path Traversal
+		return "", nil, errors.New("Path Traversal")
+	}
 
-	} else { // Resource URLs
-		file_path = path.Join(root_fs, target_path)
+	// Is Root
+	if target_path == "/" {
+		file_path = filepath.Join(root_fs, "index.html")
 	}
 
 	stat, err := os.Stat(file_path)

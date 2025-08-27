@@ -53,7 +53,7 @@ func ParseRawHttpReq(raw_http string) (*HttpReq, error) {
 	}
 
 	// Check Target Form
-	if !isValidTarget(raw_target, strings.ToUpper(raw_method)) {
+	if !IsValidTarget(raw_target, strings.ToUpper(raw_method)) {
 		return nil, fmt.Errorf("invalid HTTP target")
 	}
 
@@ -199,7 +199,7 @@ var (
 	asteriskForm  = regexp.MustCompile(`^\*$`)
 )
 
-func isValidTarget(target string, method string) bool {
+func IsValidTarget(target string, method string) bool {
 	switch {
 	case asteriskForm.MatchString(target):
 		return true
