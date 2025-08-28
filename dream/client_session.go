@@ -6,6 +6,7 @@ import (
 	"dreamproxy/http"
 	"dreamproxy/logger"
 	"dreamproxy/mime"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -24,6 +25,11 @@ type ClientSession struct {
 	RemoteAddress string
 	RemotePort    string
 	Connection    net.Conn
+
+	// Tunneling Fields
+	IsTunneling bool
+	TunnelHost  string
+	TunnelPort  string
 }
 
 func NewClientSession(connection net.Conn) ClientSession {
@@ -74,7 +80,7 @@ func (session *ClientSession) HandleConnection(server_configs []config.Server) {
 		//------------- Request has been successfully parsed by now
 
 		req.Headers["x-forwarded-for"] = connection.RemoteAddr().String()
-		res, err := HandleRequest(req, server_configs)
+		res, err := session.HandleRequest(req, server_configs)
 
 		if err != nil {
 			res := http.NewBadRequestRes(*req, connection.RemoteAddr().String(), err)
@@ -112,7 +118,7 @@ func (session *ClientSession) HandleConnection(server_configs []config.Server) {
 	}
 }
 
-func HandleRequest(req *http.HttpReq, server_configs []config.Server) (*http.HttpRes, error) {
+func (session *ClientSession) HandleRequest(req *http.HttpReq, server_configs []config.Server) (*http.HttpRes, error) {
 	var res *http.HttpRes
 	target := req.Target
 
@@ -120,6 +126,29 @@ func HandleRequest(req *http.HttpReq, server_configs []config.Server) (*http.Htt
 	res = &http.HttpRes{
 		Version: http.V1_1,
 		Headers: make(map[string]string),
+	}
+
+	// Handle OPTIONS * (Asterisk Form)
+	if http.AsteriskForm.MatchString(target) {
+		if req.Method != "OPTIONS" {
+			// Bad Request
+			return nil, errors.New("* can only be used with OPTIONS method")
+		}
+		res.Status = http.StatusOK
+		res.Headers["allow"] = "GET, POST, PUT, PATCH, DELETE, HEAD, CONNECT, OPTIONS"
+		res.Headers["content-length"] = "0"
+
+		return res, nil
+	}
+
+	// Handle CONNECT (Tunneling)
+	if http.AuthorityForm.MatchString(target) {
+		if req.Method != "CONNECT" {
+			// Bad Request
+			return nil, errors.New("Authority form currently only works with CONNECT method")
+		}
+
+		// Open a tunnel (Tunnels are blind and don't process nor peek in the data)
 	}
 
 	res.Headers["connection"] = req.Headers["connection"]
