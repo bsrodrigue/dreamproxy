@@ -24,7 +24,10 @@ type SSLConfig struct {
 }
 
 type Location struct {
-	Path      string `json:"path"`
-	Root      string `json:"root,omitempty"`
-	ProxyPass string `json:"proxy_pass,omitempty"`
+	Path          string `json:"path"`
+	Root          string `json:"root,omitempty"`
+	ProxyPass     string `json:"proxy_pass,omitempty"`
+	OriginHost    string `json:"origin_host"`
+	OriginPort    string `json:"origin_port"`
+	OriginPortInt int    `json:"origin_port_int"`
 }

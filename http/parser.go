@@ -193,8 +193,8 @@ func ParseHttpHeaders(raw_headers string) map[string]string {
 }
 
 var (
-	originForm    = regexp.MustCompile(`^/[^ ]*$`)
-	absoluteForm  = regexp.MustCompile(`^https?://[^ ]+$`)
+	OriginForm    = regexp.MustCompile(`^/[^ ]*$`)
+	AbsoluteForm  = regexp.MustCompile(`^https?://[^ ]+$`)
 	AuthorityForm = regexp.MustCompile(`^[^/:]+(:[0-9]+)?$`) // host[:port]
 	AsteriskForm  = regexp.MustCompile(`^\*$`)
 )
@@ -203,9 +203,9 @@ func IsValidTarget(target string, method string) bool {
 	switch {
 	case AsteriskForm.MatchString(target):
 		return true
-	case originForm.MatchString(target):
+	case OriginForm.MatchString(target):
 		return true
-	case absoluteForm.MatchString(target):
+	case AbsoluteForm.MatchString(target):
 		return true
 	case method == "CONNECT" && AuthorityForm.MatchString(target):
 		return true

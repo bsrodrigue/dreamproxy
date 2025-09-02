@@ -3,6 +3,7 @@ package main
 import (
 	"dreamproxy/config"
 	"dreamproxy/dream"
+	"dreamproxy/fs"
 	"log"
 	"net/http"
 	_ "net/http/pprof"
@@ -19,7 +20,7 @@ func main() {
 		log.Println(http.ListenAndServe("localhost:6060", nil))
 	}()
 
-	ctxts := []dream.DreamContext{}
+	fs.GlobalStaticFileCache = fs.NewStaticFileCache()
 	dreamconfig = config.LoadDreamFile(CONFIG_FILE)
 
 	config_map := map[string][]config.Server{}
@@ -36,15 +37,10 @@ func main() {
 
 	for port_str, server_configs := range config_map {
 		ctxt := dream.NewDreamContext(port_str, server_configs)
-		ctxts = append(ctxts, ctxt)
+		go ctxt.RunDreamContext() // Launch Dream Contexts
 	}
 
-	// Server Loop
-	for _, ctxt := range ctxts {
-		go ctxt.RunDreamContext()
-	}
-
-	for {
-		// Keep main alive
+	select {
+	// Keep main alive
 	}
 }

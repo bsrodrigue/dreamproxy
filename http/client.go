@@ -51,6 +51,8 @@ func PreprocessCfg(cfg RequestConfig, host string, path string) RequestConfig {
 func HandleRequest(req HttpReq, host string, port int) (*HttpRes, error) {
 	connection, err := net.Dial("tcp4", net.JoinHostPort(host, fmt.Sprint(port)))
 
+	defer connection.Close()
+
 	if err != nil {
 		return nil, err
 	}

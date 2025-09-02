@@ -55,6 +55,8 @@ func (session *ClientSession) HandleConnection(server_configs []config.Server) {
 
 	connection := session.Connection
 
+	// connection.SetReadDeadline(time.Now().Add(5 * time.Second))
+
 	for {
 		req_start := time.Now()
 		req_raw, err := http.ReadFullHttpMessage(connection)
@@ -120,13 +122,24 @@ func (session *ClientSession) HandleConnection(server_configs []config.Server) {
 
 func (session *ClientSession) HandleRequest(req *http.HttpReq, server_configs []config.Server) (*http.HttpRes, error) {
 	var res *http.HttpRes
+	var req_url *url.URL
+	var err error
+
 	target := req.Target
+	host := req.Headers["host"]
+	scheme := req.Scheme
+	method := req.Method
 
 	// Prepare Response
 	res = &http.HttpRes{
 		Version: http.V1_1,
 		Headers: make(map[string]string),
 	}
+
+	res.Headers["connection"] = req.Headers["connection"]
+
+	// res.Headers["content-length"] = "0" // By default
+	// res.Status = http.StatusNotFound    // By default
 
 	// Handle OPTIONS * (Asterisk Form)
 	if http.AsteriskForm.MatchString(target) {
@@ -135,8 +148,10 @@ func (session *ClientSession) HandleRequest(req *http.HttpReq, server_configs []
 			return nil, errors.New("* can only be used with OPTIONS method")
 		}
 		res.Status = http.StatusOK
-		res.Headers["allow"] = "GET, POST, PUT, PATCH, DELETE, HEAD, CONNECT, OPTIONS"
-		res.Headers["content-length"] = "0"
+		res.Headers["allow"] = "GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS" // We don't support CONNECT yet, maybe we will never...
+
+		// Maybe it is pointless to set this header when there is no content
+		// res.Headers["content-length"] = "0"
 
 		return res, nil
 	}
@@ -149,14 +164,20 @@ func (session *ClientSession) HandleRequest(req *http.HttpReq, server_configs []
 		}
 
 		// Open a tunnel (Tunnels are blind and don't process nor peek in the data)
+		// Implement it when you want to support forward proxying.
+
+		return nil, errors.New("Not supported yet :'|")
 	}
 
-	res.Headers["connection"] = req.Headers["connection"]
+	// Handle Absolute Form
+	if http.AbsoluteForm.MatchString(target) {
+		req_url, err = url.Parse(target)
+	}
 
-	host := req.Headers["host"]
-	method := req.Method
-	scheme := req.Scheme
-	target_url, err := url.Parse(scheme + "://" + host + target)
+	// Handle Origin Form
+	if http.OriginForm.MatchString(target) {
+		req_url, err = url.Parse(scheme + "://" + host + target)
+	}
 
 	if err != nil {
 		log.Println("Invalid URL:", err)
@@ -164,50 +185,44 @@ func (session *ClientSession) HandleRequest(req *http.HttpReq, server_configs []
 		return nil, err
 	}
 
-	target_url.Path = path.Clean(target_url.Path)
+	req_url.Path = path.Clean(req_url.Path)
 
 	// Handle Configs
 	for _, server_cfg := range server_configs {
 
-		if host == server_cfg.Name || slices.Contains(server_cfg.Hosts, host) {
+		if host != server_cfg.Name && !slices.Contains(server_cfg.Hosts, host) {
+			// No configuration matches this request target.
+			// Maybe you should learn about pattern matching for more precise matching.
+			continue
+		}
 
-			// Check if port is part of host
-			if strings.Contains(host, ":") {
-				host = strings.SplitN(host, ":", 2)[0]
+		// Check if port is part of host
+		if strings.Contains(host, ":") {
+			host = strings.SplitN(host, ":", 2)[0]
+		}
+
+		for _, location := range server_cfg.Locations {
+
+			// Does not support globbing yet
+			if !strings.HasPrefix(req_url.Path, path.Clean(location.Path)) {
+				continue
 			}
 
-			for _, location := range server_cfg.Locations {
+			// Check if Proxy
+			if location.ProxyPass != "" {
+				res, err = http.MakeRequest(req.Method, location.OriginHost, location.OriginPortInt, req_url.Path, http.RequestConfig{
+					Headers: req.Headers,
+					Body:    req.Body,
+				})
 
-				// Does not support globbing yet
-				if !strings.HasPrefix(target_url.Path, path.Clean(location.Path)) {
-					continue
+				if err != nil {
+					return nil, err
 				}
 
-				// Check if Proxy
-				if location.ProxyPass != "" {
-					origin_server := location.ProxyPass
-					origin_host := ""
-					origin_port_str := ""
+				if res.Status == http.StatusMovedPermanently || res.Status == http.StatusFound {
+					new_url_path := res.Headers["location"]
 
-					if strings.Contains(origin_server, "://") {
-						scheme_host := strings.SplitN(origin_server, "://", 2)
-
-						origin_host = scheme_host[1]
-
-						if strings.Contains(origin_host, ":") {
-							origin_host_port := strings.SplitN(origin_host, ":", 2)
-							origin_host = origin_host_port[0]
-							origin_port_str = origin_host_port[1]
-						}
-					}
-
-					origin_port, err := strconv.Atoi(origin_port_str)
-
-					if err != nil {
-						continue
-					}
-
-					res, err = http.MakeRequest(req.Method, origin_host, origin_port, target_url.Path, http.RequestConfig{
+					res, err = http.MakeRequest(req.Method, location.OriginHost, location.OriginPortInt, new_url_path, http.RequestConfig{
 						Headers: req.Headers,
 						Body:    req.Body,
 					})
@@ -215,41 +230,26 @@ func (session *ClientSession) HandleRequest(req *http.HttpReq, server_configs []
 					if err != nil {
 						return nil, err
 					}
-
-					if res.Status == http.StatusMovedPermanently || res.Status == http.StatusFound {
-						location := res.Headers["location"]
-
-						res, err = http.MakeRequest(req.Method, origin_host, origin_port, location, http.RequestConfig{
-							Headers: req.Headers,
-							Body:    req.Body,
-						})
-
-						if err != nil {
-							return nil, err
-						}
-					}
-				} else {
-
-					// Static File Server
-					switch method {
-					case "HEAD":
-						handleHead(target_url.Path, res, location.Root)
-						break
-					case "GET":
-						handleGet(target_url.Path, *req, res, location.Root)
-						break
-					default:
-						// Method not allowed
-						return nil, err
-					}
 				}
+			} else {
 
+				// Static File Server
+				switch method {
+				case "HEAD":
+					handleHead(req_url.Path, res, location.Root)
+					break
+				case "GET":
+					handleGet(req_url.Path, *req, res, location.Root)
+					break
+				default:
+					// Method not allowed
+					return nil, err
+				}
 			}
 
-			return res, nil
 		}
 
-		continue
+		return res, nil
 	}
 
 	return res, nil
@@ -295,10 +295,6 @@ func handleGet(target_url string, req http.HttpReq, res *http.HttpRes, root_fs s
 
 	if err != nil {
 		res.Status = http.StatusNotFound
-
-		res.Headers["content-length"] = "0"
-		res.Headers["connection"] = "close"
-
 		res.Body = make([]byte, 0)
 
 	} else {
@@ -312,12 +308,15 @@ func handleGet(target_url string, req http.HttpReq, res *http.HttpRes, root_fs s
 		res.Headers["etag"] = etag
 		res.Headers["last-modified"] = stat.ModTime().Format(time.RFC1123)
 
+		// Handle Server Side caching
+		// res.Headers["expires"] =
+
 		if if_none_match == etag {
 			res.Status = http.StatusNotModified
-			res.Headers["content-length"] = "0"
 			res_body = make([]byte, 0)
 		} else {
-			res_body, err = fs.LoadFile(file_path)
+			// res_body, err = fs.LoadFile(file_path)
+			res_body, err = fs.GlobalStaticFileCache.Get(file_path)
 
 			if err != nil {
 				return err

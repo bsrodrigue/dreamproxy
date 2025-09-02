@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"log"
 	"strconv"
 	"strings"
 	"unicode"
@@ -170,6 +171,33 @@ func (p *Parser) parseLocation() Location {
 			loc.Root = value
 		case "proxy_pass":
 			loc.ProxyPass = value
+
+			origin_server := loc.ProxyPass
+			origin_host := ""
+			origin_port_str := ""
+
+			if strings.Contains(origin_server, "://") {
+				scheme_host := strings.SplitN(origin_server, "://", 2)
+
+				origin_host = scheme_host[1]
+
+				if strings.Contains(origin_host, ":") {
+					origin_host_port := strings.SplitN(origin_host, ":", 2)
+					origin_host = origin_host_port[0]
+					origin_port_str = origin_host_port[1]
+				}
+			}
+
+			origin_port_int, err := strconv.Atoi(origin_port_str)
+
+			if err != nil {
+				log.Panic("Error while converting ascii port to integer: ", err)
+			}
+
+			loc.OriginHost = origin_host
+			loc.OriginPort = origin_port_str
+			loc.OriginPortInt = origin_port_int
+
 		default:
 			panic(fmt.Sprintf("unknown location directive %s at line %d", key, p.peek().Line))
 		}

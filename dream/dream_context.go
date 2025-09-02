@@ -26,7 +26,6 @@ func (ctxt *DreamContext) RunDreamContext() {
 	log.Printf("%s", fmt.Sprintf("listening on :%s", ctxt.Port))
 
 	for {
-
 		connection, err := ln.Accept()
 
 		if err != nil {
