@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-const CACHE_DURATION int64 = 1000 // in ms
+const CACHE_DURATION int64 = 5 * 60 * 1000 // in ms (5mins)
 
 type StaticFileCacheItem struct {
 	CreatedAt int64 // in ms
@@ -48,7 +48,7 @@ func (fcache *StaticFileCache) _Get(key string) ([]byte, error) {
 
 	if !ok {
 		// Cache Miss
-		return []byte(""), errors.New("Cache Miss")
+		return nil, errors.New("Cache Miss")
 	}
 
 	// Check if expired
@@ -57,7 +57,7 @@ func (fcache *StaticFileCache) _Get(key string) ([]byte, error) {
 	if now >= (cached.CreatedAt + CACHE_DURATION) {
 		// Expired
 
-		return []byte(""), errors.New("Expired")
+		return nil, errors.New("Expired")
 	}
 
 	return cached.Binary, nil
@@ -71,13 +71,13 @@ func (fcache *StaticFileCache) Get(key string) ([]byte, error) {
 		body, err := LoadFile(key)
 
 		if err != nil {
-			return []byte(""), err
+			return nil, err
 		}
 
 		err = fcache._Set(key, body)
 
 		if err != nil {
-			return []byte(""), err
+			return nil, err
 		}
 
 		data = body

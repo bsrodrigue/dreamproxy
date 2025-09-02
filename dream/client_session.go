@@ -55,8 +55,6 @@ func (session *ClientSession) HandleConnection(server_configs []config.Server) {
 
 	connection := session.Connection
 
-	// connection.SetReadDeadline(time.Now().Add(5 * time.Second))
-
 	for {
 		req_start := time.Now()
 		req_raw, err := http.ReadFullHttpMessage(connection)
@@ -111,7 +109,7 @@ func (session *ClientSession) HandleConnection(server_configs []config.Server) {
 		log.Response.StatusCode = int(res.Status)
 
 		// Create a log handler
-		// fmt.Println(log.ToText())
+		fmt.Println(log.ToText())
 
 		// Check keep-alive
 		if strings.ToLower(res.Headers["connection"]) == "close" {
