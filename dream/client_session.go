@@ -283,6 +283,13 @@ func handleGet(target_url string, req http.HttpReq, res *http.HttpRes, root_fs s
 
 	file_path, stat, err := fs.ResolveFilePath(target_url, root_fs)
 
+	if err != nil {
+		res.Status = http.StatusNotFound
+		res.Body = make([]byte, 0)
+		return err
+	}
+
+	// Set content type
 	ext := filepath.Ext(file_path)
 
 	content_type := mime.MimeTypes[ext]
@@ -291,40 +298,34 @@ func handleGet(target_url string, req http.HttpReq, res *http.HttpRes, root_fs s
 		content_type = "application/octet-stream"
 	}
 
-	if err != nil {
-		res.Status = http.StatusNotFound
-		res.Body = make([]byte, 0)
+	res.Headers["content-type"] = content_type
 
+	if_none_match := req.Headers["if-none-match"]
+
+	// Generate ETag
+	file_size := stat.Size()
+	last_modified := stat.ModTime().Unix()
+	etag := strconv.Itoa(int(file_size) + int(last_modified))
+
+	res.Headers["etag"] = etag
+	res.Headers["last-modified"] = stat.ModTime().Format(time.RFC1123)
+
+	// Handle Server Side caching
+	// res.Headers["expires"] =
+
+	if if_none_match == etag {
+		res.Status = http.StatusNotModified
+		res_body = make([]byte, 0)
 	} else {
-		if_none_match := req.Headers["if-none-match"]
+		res_body, err = fs.GlobalStaticFileCache.Get(file_path)
 
-		// Generate ETag
-		file_size := stat.Size()
-		last_modified := stat.ModTime().Unix()
-		etag := strconv.Itoa(int(file_size) + int(last_modified))
-
-		res.Headers["etag"] = etag
-		res.Headers["last-modified"] = stat.ModTime().Format(time.RFC1123)
-
-		// Handle Server Side caching
-		// res.Headers["expires"] =
-
-		if if_none_match == etag {
-			res.Status = http.StatusNotModified
-			res_body = make([]byte, 0)
-		} else {
-			// res_body, err = fs.LoadFile(file_path)
-			res_body, err = fs.GlobalStaticFileCache.Get(file_path)
-
-			if err != nil {
-				return err
-			}
-
-			res.Status = http.StatusOK
-			res.Headers["content-length"] = fmt.Sprint(len(res_body))
-			res.Body = res_body
+		if err != nil {
+			return err
 		}
 
+		res.Status = http.StatusOK
+		res.Headers["content-length"] = fmt.Sprint(len(res_body))
+		res.Body = res_body
 	}
 
 	return err

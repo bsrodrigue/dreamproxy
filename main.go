@@ -4,8 +4,6 @@ import (
 	"dreamproxy/config"
 	"dreamproxy/dream"
 	"dreamproxy/fs"
-	"log"
-	"net/http"
 	_ "net/http/pprof"
 	"strconv"
 )
@@ -16,9 +14,9 @@ const CONFIG_FILE string = "./Dreamfile"
 var dreamconfig config.Config
 
 func main() {
-	go func() {
-		log.Println(http.ListenAndServe("localhost:6060", nil))
-	}()
+	// go func() {
+	// 	log.Println(http.ListenAndServe("localhost:6060", nil))
+	// }()
 
 	fs.GlobalStaticFileCache = fs.NewStaticFileCache()
 	dreamconfig = config.LoadDreamFile(CONFIG_FILE)
