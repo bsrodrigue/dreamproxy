@@ -289,16 +289,7 @@ func handleGet(target_url string, req http.HttpReq, res *http.HttpRes, root_fs s
 		return err
 	}
 
-	// Set content type
-	ext := filepath.Ext(file_path)
-
-	content_type := mime.MimeTypes[ext]
-
-	if content_type == "" {
-		content_type = "application/octet-stream"
-	}
-
-	res.Headers["content-type"] = content_type
+	res.Headers["content-type"] = mime.GetContentType(file_path)
 
 	if_none_match := req.Headers["if-none-match"]
 
@@ -328,5 +319,5 @@ func handleGet(target_url string, req http.HttpReq, res *http.HttpRes, root_fs s
 		res.Body = res_body
 	}
 
-	return err
+	return nil
 }

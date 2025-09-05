@@ -1,5 +1,7 @@
 package mime
 
+import "path/filepath"
+
 var MimeTypes = map[string]string{
 	".html":  "text/html; charset=utf-8",
 	".css":   "text/css; charset=utf-8",
@@ -15,4 +17,16 @@ var MimeTypes = map[string]string{
 	".woff":  "font/woff",
 	".woff2": "font/woff2",
 	".ttf":   "font/ttf",
+}
+
+func GetContentType(file_path string) string {
+	ext := filepath.Ext(file_path)
+
+	content_type := MimeTypes[ext]
+
+	if content_type == "" {
+		content_type = "application/octet-stream"
+	}
+
+	return content_type
 }
