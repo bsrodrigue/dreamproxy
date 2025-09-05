@@ -15,6 +15,7 @@ import (
 	"path"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -280,6 +281,7 @@ func handleHead(target_url string, res *http.HttpRes, root_fs string) error {
 func handleGet(target_url string, req http.HttpReq, res *http.HttpRes, root_fs string) error {
 	var res_body []byte
 	var err error
+	res.Status = http.StatusOK
 
 	file_path, stat, err := fs.ResolveFilePath(target_url, root_fs)
 
@@ -307,6 +309,24 @@ func handleGet(target_url string, req http.HttpReq, res *http.HttpRes, root_fs s
 	// Handle Server Side caching
 	res_body, err = fs.GlobalStaticFileCache.Get(file_path)
 
+	// Handle Range Requests
+	content_range, ok := req.Headers["range"]
+	if ok {
+		content_range = strings.SplitN(content_range, "=", 2)[1]
+
+		bounds := strings.SplitN(content_range, "-", 2)
+
+		lower_bound, err := strconv.Atoi(bounds[0])
+		upper_bound, err := strconv.Atoi(bounds[1])
+
+		if err != nil {
+			return err
+		}
+
+		res.Status = http.StatusPartialContent
+		res_body = res_body[lower_bound:upper_bound]
+	}
+
 	if err != nil {
 		return err
 	}
@@ -319,7 +339,6 @@ func handleGet(target_url string, req http.HttpReq, res *http.HttpRes, root_fs s
 
 	res.Headers["cache-control"] = fs.GenerateCacheControl(file_path)
 
-	res.Status = http.StatusOK
 	res.Headers["content-length"] = fmt.Sprint(len(res_body))
 	res.Body = res_body
 

@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StreamFlix - Watch Episode 01</title>
+     <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <header class="header">
+        <div class="logo">StreamFlix</div>
+        <nav>
+            <ul class="nav-menu">
+                <li><a href="#" onclick="showNotification('Home clicked')">Home</a></li>
+                <li><a href="#" onclick="showNotification('Movies clicked')">Movies</a></li>
+                <li><a href="#" onclick="showNotification('TV Shows clicked')">TV Shows</a></li>
+                <li><a href="#" onclick="showNotification('My List clicked')">My List</a></li>
+            </ul>
+        </nav>
+        <div class="user-profile">
+            <div class="avatar">JD</div>
+        </div>
+    </header>
+
+    <main class="main-content">
+        <div class="video-container">
+            <video src="/episode01.mp4" controls class="video-player" id="videoPlayer">
+            </video>
+        </div>
+
+        <div class="info-section">
+            <div class="episode-info">
+                <h1>Episode 01 - The Beginning</h1>
+                <div class="episode-meta">
+                    <div class="rating">
+                        <span class="stars">★★★★☆</span>
+                        <span>8.7/10</span>
+                    </div>
+                    <span>2024</span>
+                    <span>42 min</span>
+                    <span>HD</span>
+                </div>
+                <p class="description">
+                    In this gripping season opener, our heroes face their greatest challenge yet. As mysterious events unfold across the city, 
+                    long-buried secrets begin to surface, threatening everything they hold dear. With stunning visual effects and masterful 
+                    storytelling, this episode sets the stage for an unforgettable journey filled with unexpected twists and emotional depth.
+                </p>
+                <div class="action-buttons">
+                    <button class="btn btn-primary" id="watchButton">▶ Continue Watching</button>
+                    <button class="btn btn-secondary" onclick="addToList()">+ Add to List</button>
+                    <button class="btn btn-secondary" onclick="shareEpisode()">Share</button>
+                </div>
+            </div>
+
+            <div class="sidebar">
+                <div class="episode-list">
+                    <h3>Season 1 Episodes</h3>
+                    <div class="episode-item active">
+                        <div class="episode-thumb"></div>
+                        <div class="episode-details">
+                            <h4>Episode 01 - The Beginning</h4>
+                            <p>42 min • Currently watching</p>
+                        </div>
+                    </div>
+                    <div class="episode-item" onclick="selectEpisode(2)">
+                        <div class="episode-thumb"></div>
+                        <div class="episode-details">
+                            <h4>Episode 02 - Rising Tensions</h4>
+                            <p>45 min • Not watched</p>
+                        </div>
+                    </div>
+                    <div class="episode-item" onclick="selectEpisode(3)">
+                        <div class="episode-thumb"></div>
+                        <div class="episode-details">
+                            <h4>Episode 03 - Revelations</h4>
+                            <p>43 min • Not watched</p>
+                        </div>
+                    </div>
+                    <div class="episode-item" onclick="selectEpisode(4)">
+                        <div class="episode-thumb"></div>
+                        <div class="episode-details">
+                            <h4>Episode 04 - The Hunt Begins</h4>
+                            <p>41 min • Not watched</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="ui.js">
+    </script>
+    <script src="stream.js">
+    </script>
+    
+</body>
+</html>

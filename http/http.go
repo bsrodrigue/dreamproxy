@@ -164,6 +164,7 @@ const (
 	StatusCreated             StatusCode = 201
 	StatusAccepted            StatusCode = 202
 	StatusNoContent           StatusCode = 204
+	StatusPartialContent      StatusCode = 206
 	StatusMovedPermanently    StatusCode = 301
 	StatusFound               StatusCode = 302
 	StatusNotModified         StatusCode = 304
@@ -185,6 +186,7 @@ var StatusText = map[StatusCode]string{
 	StatusCreated:             "Created",
 	StatusAccepted:            "Accepted",
 	StatusNoContent:           "No Content",
+	StatusPartialContent:      "Partial Content",
 	StatusMovedPermanently:    "Moved Permanently",
 	StatusFound:               "Found",
 	StatusNotModified:         "Not Modified",
