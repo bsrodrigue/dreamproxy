@@ -1,6 +1,7 @@
 package http
 
 import (
+	"dreamproxy/format"
 	"strconv"
 	"strings"
 	"time"
@@ -99,8 +100,8 @@ func CreateHttpRes() *HttpRes {
 func (res *HttpRes) SetServerHeaders() {
 	now := time.Now().UTC() // Make this configurable
 	res.Headers["server"] = "dreamserver/0.0.1 (Archlinux)"
-	res.Headers["Via"] = "HTTP/1.1 dreamserver"
-	res.Headers["date"] = now.Format(time.RFC1123)
+	res.Headers["Via"] += "HTTP/1.1 dreamserver,"
+	res.Headers["date"] = format.TimeToGMT(now)
 }
 
 func (res *HttpRes) SetReverseProxyHeaders() {

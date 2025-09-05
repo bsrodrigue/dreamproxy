@@ -2,6 +2,7 @@ package dream
 
 import (
 	"dreamproxy/config"
+	"dreamproxy/format"
 	"dreamproxy/fs"
 	"dreamproxy/http"
 	"dreamproxy/logger"
@@ -14,7 +15,6 @@ import (
 	"path"
 	"path/filepath"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 
@@ -289,35 +289,39 @@ func handleGet(target_url string, req http.HttpReq, res *http.HttpRes, root_fs s
 		return err
 	}
 
+	// Set Content-Type
 	res.Headers["content-type"] = mime.GetContentType(file_path)
 
 	if_none_match := req.Headers["if-none-match"]
 
 	// Generate ETag
-	file_size := stat.Size()
-	last_modified := stat.ModTime().Unix()
-	etag := strconv.Itoa(int(file_size) + int(last_modified))
+	res.Headers["etag"] = fs.GenerateETag(stat)
+	res.Headers["last-modified"] = format.TimeToGMT(stat.ModTime())
 
-	res.Headers["etag"] = etag
-	res.Headers["last-modified"] = stat.ModTime().Format(time.RFC1123)
-
-	// Handle Server Side caching
-	// res.Headers["expires"] =
-
-	if if_none_match == etag {
+	if if_none_match == res.Headers["etag"] { // Client-Side Caching
 		res.Status = http.StatusNotModified
 		res_body = make([]byte, 0)
-	} else {
-		res_body, err = fs.GlobalStaticFileCache.Get(file_path)
-
-		if err != nil {
-			return err
-		}
-
-		res.Status = http.StatusOK
-		res.Headers["content-length"] = fmt.Sprint(len(res_body))
-		res.Body = res_body
+		return nil
 	}
+
+	// Handle Server Side caching
+	res_body, err = fs.GlobalStaticFileCache.Get(file_path)
+
+	if err != nil {
+		return err
+	}
+
+	res.Headers["expires"], err = fs.GlobalStaticFileCache.GetExpirationDateTime(file_path)
+
+	if err != nil {
+		res.Headers["expires"] = ""
+	}
+
+	res.Headers["cache-control"] = fs.GenerateCacheControl(file_path)
+
+	res.Status = http.StatusOK
+	res.Headers["content-length"] = fmt.Sprint(len(res_body))
+	res.Body = res_body
 
 	return nil
 }

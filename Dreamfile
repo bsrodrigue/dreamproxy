@@ -20,7 +20,7 @@ servers {
     access_log /var/log/dreamserver/requests.log
 
     location / {
-      root /var/www/static/landing_page
+      root /var/www/static
     }
   }
 

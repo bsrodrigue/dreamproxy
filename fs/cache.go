@@ -1,12 +1,60 @@
 package fs
 
 import (
+	"dreamproxy/format"
 	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
 )
 
-const CACHE_DURATION int64 = 5 * 60 * 1000 // in ms (5mins)
+const CACHE_DURATION_MS int64 = 5 * 60 * 1000 // in ms (5mins)
+
+var mimeCacheDurationMs = map[string]int64{
+	".html":  60 * 1000, // 1min
+	".css":   CACHE_DURATION_MS,
+	".js":    CACHE_DURATION_MS,
+	".json":  CACHE_DURATION_MS,
+	".png":   CACHE_DURATION_MS,
+	".jpg":   CACHE_DURATION_MS,
+	".jpeg":  CACHE_DURATION_MS,
+	".gif":   CACHE_DURATION_MS,
+	".svg":   CACHE_DURATION_MS,
+	".ico":   CACHE_DURATION_MS,
+	".txt":   CACHE_DURATION_MS,
+	".woff":  CACHE_DURATION_MS,
+	".woff2": CACHE_DURATION_MS,
+	".ttf":   CACHE_DURATION_MS,
+}
+
+var mimeCacheImmutability = map[string]string{
+	".html":  "", // 1min
+	".css":   "immutable",
+	".js":    "immutable",
+	".json":  "immutable",
+	".png":   "immutable",
+	".jpg":   "immutable",
+	".jpeg":  "immutable",
+	".gif":   "immutable",
+	".svg":   "immutable",
+	".ico":   "immutable",
+	".txt":   "immutable",
+	".woff":  "immutable",
+	".woff2": "immutable",
+	".ttf":   "immutable",
+}
+
+func GetMimeCacheDurationMs(mime_type string) int64 {
+	duration, ok := mimeCacheDurationMs[mime_type]
+
+	if !ok {
+		duration = 0
+	}
+
+	return duration
+}
 
 type StaticFileCacheItem struct {
 	CreatedAt int64 // in ms
@@ -51,12 +99,17 @@ func (fcache *StaticFileCache) _Get(key string) ([]byte, error) {
 		return nil, errors.New("Cache Miss")
 	}
 
-	// Check if expired
 	now := time.Now().UnixMilli()
+	ext := filepath.Ext(key)
 
-	if now >= (cached.CreatedAt + CACHE_DURATION) {
+	if ext == "" {
+		ext = ".html"
+	}
+
+	cache_duration_ms := GetMimeCacheDurationMs(ext)
+
+	if now >= (cached.CreatedAt + cache_duration_ms) { // Check if expired
 		// Expired
-
 		return nil, errors.New("Expired")
 	}
 
@@ -84,4 +137,48 @@ func (fcache *StaticFileCache) Get(key string) ([]byte, error) {
 	}
 
 	return data, nil
+}
+
+func GenerateETag(fileStat os.FileInfo) string {
+	return fmt.Sprintf(`"%x-%x"`, fileStat.Size(), fileStat.ModTime().Unix())
+}
+
+func GetMimeCacheDurationByKey(key string) int64 {
+	ext := filepath.Ext(key)
+
+	if ext == "" {
+		ext = ".html"
+	}
+
+	cache_duration_ms := GetMimeCacheDurationMs(ext)
+
+	return cache_duration_ms
+}
+
+func GetMimeCacheImmutabilityByKey(key string) string {
+	ext := filepath.Ext(key)
+
+	if ext == "" {
+		ext = ".html"
+	}
+
+	immutability := mimeCacheImmutability[ext]
+
+	return immutability
+}
+
+func (fcache *StaticFileCache) GetExpirationDateTime(key string) (string, error) {
+	cacheDurationMs := GetMimeCacheDurationByKey(key)
+	exp := time.Now().Add(time.Duration(cacheDurationMs) * time.Millisecond).UTC()
+	return format.TimeToGMT(exp), nil
+}
+
+func GenerateCacheControl(key string) string {
+	maxAge := GetMimeCacheDurationByKey(key) / 1000
+	immutability := GetMimeCacheImmutabilityByKey(key)
+
+	if immutability != "" {
+		return fmt.Sprintf("public, max-age=%d, %s", maxAge, immutability)
+	}
+	return fmt.Sprintf("public, max-age=%d", maxAge)
 }
