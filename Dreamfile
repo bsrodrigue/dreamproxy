@@ -20,7 +20,7 @@ servers {
     access_log /var/log/dreamserver/requests.log
 
     location / {
-      root example_sites/streaming
+      root example_sites/site_one
     }
   }
 

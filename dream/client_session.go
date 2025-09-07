@@ -1,6 +1,7 @@
 package dream
 
 import (
+	"bufio"
 	"dreamproxy/config"
 	"dreamproxy/format"
 	"dreamproxy/fs"
@@ -9,17 +10,16 @@ import (
 	"dreamproxy/mime"
 	"errors"
 	"fmt"
-	"log"
+	_log "log"
 	"net"
 	"net/url"
+	"os"
 	"path"
 	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/google/uuid"
 )
 
 type ClientSession struct {
@@ -62,6 +62,7 @@ func (session *ClientSession) HandleConnection(server_configs []config.Server) {
 
 		if err != nil {
 			res := http.NewFailedToParseRes(connection.RemoteAddr().String(), err.Error())
+
 			res.Version = http.V1_1
 			res.SetServerHeaders()
 			connection.Write([]byte(res.ToStr()))
@@ -79,9 +80,15 @@ func (session *ClientSession) HandleConnection(server_configs []config.Server) {
 		}
 
 		//------------- Request has been successfully parsed by now
-
+		host := req.Headers["host"]
 		req.Headers["x-forwarded-for"] = connection.RemoteAddr().String()
-		res, err := session.HandleRequest(req, server_configs)
+
+		server_cfg, ok := FindServerConfig(host, server_configs) // Find matching server configuration
+		if !ok {
+			return
+		}
+
+		res, err := session.HandleRequest(req, server_cfg)
 
 		if err != nil {
 			res := http.NewBadRequestRes(*req, connection.RemoteAddr().String(), err)
@@ -99,18 +106,34 @@ func (session *ClientSession) HandleConnection(server_configs []config.Server) {
 		connection.Write(res_bytes)
 
 		log := logger.NewRequestLog(logger.DREAM_SERVER, logger.INFO, logger.REQUEST, "")
-		log.Request.ID = uuid.New().String()
+		log.Request.ClientIP = connection.RemoteAddr().String()
 		log.Request.Method = req.Method
 		log.Request.Path = req.Target
 		log.Request.Host = req.Headers["host"]
-		log.Request.ClientIP = connection.RemoteAddr().String()
 		log.Response.StatusCode = int(res.Status)
 		log.Response.BytesSent = int64(len(res.Body))
-		log.Response.LatencyMS = latency.Milliseconds()
 		log.Response.StatusCode = int(res.Status)
+		log.Response.LatencyMS = latency.Milliseconds()
+
+		access_logpath := server_cfg.AccessLog
+		log_file, err := os.OpenFile(access_logpath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+
+		if err != nil {
+			_log.Println(err)
+			continue // Handle this later
+		}
 
 		// Create a log handler
-		fmt.Println(log.ToText())
+		buf_writer := bufio.NewWriter(log_file)
+		written_bytes, err := buf_writer.WriteString(log.ToText())
+
+		if err != nil {
+			println(written_bytes)
+			_log.Println(err)
+			continue
+		}
+
+		buf_writer.Flush()
 
 		// Check keep-alive
 		if strings.ToLower(res.Headers["connection"]) == "close" {
@@ -119,7 +142,26 @@ func (session *ClientSession) HandleConnection(server_configs []config.Server) {
 	}
 }
 
-func (session *ClientSession) HandleRequest(req *http.HttpReq, server_configs []config.Server) (*http.HttpRes, error) {
+// TODO: Consider caching
+func FindServerConfig(host string, server_configs []config.Server) (config.Server, bool) {
+	var ok = false
+	var config config.Server = config.Server{}
+
+	for _, cfg := range server_configs {
+		if host != cfg.Name && !slices.Contains(cfg.Hosts, host) {
+			// No configuration matches this request target.
+			// Maybe you should learn about pattern matching for more precise matching.
+			continue
+		}
+
+		ok = true
+		config = cfg
+	}
+
+	return config, ok
+}
+
+func (session *ClientSession) HandleRequest(req *http.HttpReq, server_cfg config.Server) (*http.HttpRes, error) {
 	var res *http.HttpRes
 	var req_url *url.URL
 	var err error
@@ -179,37 +221,40 @@ func (session *ClientSession) HandleRequest(req *http.HttpReq, server_configs []
 	}
 
 	if err != nil {
-		log.Println("Invalid URL:", err)
+		_log.Println("Invalid URL:", err)
 		res.Status = http.StatusBadRequest
 		return nil, err
 	}
 
 	req_url.Path = path.Clean(req_url.Path)
 
-	// Handle Configs
-	for _, server_cfg := range server_configs {
+	// Check if port is part of host
+	if strings.Contains(host, ":") {
+		host = strings.SplitN(host, ":", 2)[0]
+	}
 
-		if host != server_cfg.Name && !slices.Contains(server_cfg.Hosts, host) {
-			// No configuration matches this request target.
-			// Maybe you should learn about pattern matching for more precise matching.
+	for _, location := range server_cfg.Locations {
+
+		// Does not support globbing yet
+		if !strings.HasPrefix(req_url.Path, path.Clean(location.Path)) {
 			continue
 		}
 
-		// Check if port is part of host
-		if strings.Contains(host, ":") {
-			host = strings.SplitN(host, ":", 2)[0]
-		}
+		// Check if Proxy
+		if location.ProxyPass != "" {
+			res, err = http.MakeRequest(req.Method, location.OriginHost, location.OriginPortInt, req_url.Path, http.RequestConfig{
+				Headers: req.Headers,
+				Body:    req.Body,
+			})
 
-		for _, location := range server_cfg.Locations {
-
-			// Does not support globbing yet
-			if !strings.HasPrefix(req_url.Path, path.Clean(location.Path)) {
-				continue
+			if err != nil {
+				return nil, err
 			}
 
-			// Check if Proxy
-			if location.ProxyPass != "" {
-				res, err = http.MakeRequest(req.Method, location.OriginHost, location.OriginPortInt, req_url.Path, http.RequestConfig{
+			if res.Status == http.StatusMovedPermanently || res.Status == http.StatusFound {
+				new_url_path := res.Headers["location"]
+
+				res, err = http.MakeRequest(req.Method, location.OriginHost, location.OriginPortInt, new_url_path, http.RequestConfig{
 					Headers: req.Headers,
 					Body:    req.Body,
 				})
@@ -217,38 +262,23 @@ func (session *ClientSession) HandleRequest(req *http.HttpReq, server_configs []
 				if err != nil {
 					return nil, err
 				}
-
-				if res.Status == http.StatusMovedPermanently || res.Status == http.StatusFound {
-					new_url_path := res.Headers["location"]
-
-					res, err = http.MakeRequest(req.Method, location.OriginHost, location.OriginPortInt, new_url_path, http.RequestConfig{
-						Headers: req.Headers,
-						Body:    req.Body,
-					})
-
-					if err != nil {
-						return nil, err
-					}
-				}
-			} else {
-
-				// Static File Server
-				switch method {
-				case "HEAD":
-					handleHead(req_url.Path, res, location.Root)
-					break
-				case "GET":
-					handleGet(req_url.Path, *req, res, location.Root)
-					break
-				default:
-					// Method not allowed
-					return nil, err
-				}
 			}
+		} else {
 
+			// Static File Server
+			switch method {
+			case "HEAD":
+				handleHead(req_url.Path, res, location.Root)
+				break
+			case "GET":
+				handleGet(req_url.Path, *req, res, location.Root)
+				break
+			default:
+				// Method not allowed
+				return nil, err
+			}
 		}
 
-		return res, nil
 	}
 
 	return res, nil
@@ -266,7 +296,7 @@ func handleHead(target_url string, res *http.HttpRes, root_fs string) error {
 	}
 
 	if err != nil {
-		log.Println(err)
+		_log.Println(err)
 		res.Status = http.StatusNotFound
 		res.Headers["content-length"] = "0"
 	} else {
@@ -309,6 +339,14 @@ func handleGet(target_url string, req http.HttpReq, res *http.HttpRes, root_fs s
 	// Handle Server Side caching
 	res_body, err = fs.GlobalStaticFileCache.Get(file_path)
 
+	res.Headers["expires"], err = fs.GlobalStaticFileCache.GetExpirationDateTime(file_path)
+
+	if err != nil {
+		res.Headers["expires"] = ""
+	}
+
+	res.Headers["cache-control"] = fs.GenerateCacheControl(file_path)
+
 	// Handle Range Requests
 	content_range, ok := req.Headers["range"]
 	if ok {
@@ -330,14 +368,6 @@ func handleGet(target_url string, req http.HttpReq, res *http.HttpRes, root_fs s
 	if err != nil {
 		return err
 	}
-
-	res.Headers["expires"], err = fs.GlobalStaticFileCache.GetExpirationDateTime(file_path)
-
-	if err != nil {
-		res.Headers["expires"] = ""
-	}
-
-	res.Headers["cache-control"] = fs.GenerateCacheControl(file_path)
 
 	res.Headers["content-length"] = fmt.Sprint(len(res_body))
 	res.Body = res_body

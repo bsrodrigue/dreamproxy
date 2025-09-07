@@ -1,9 +1,17 @@
 package logger
 
 import (
+	"dreamproxy/format"
 	"encoding/json"
 	"fmt"
 	"time"
+
+	"github.com/google/uuid"
+)
+
+const (
+	ACCESS_LOG_FILE = "/var/log/dreamserver/access.log"
+	ERROR_LOG_FILE  = "/var/log/dreamserver/error.log"
 )
 
 type LogLevel string
@@ -74,18 +82,22 @@ type RequestLog struct {
 }
 
 func NewRequestLog(service Service, level LogLevel, event LogEvent, message string) RequestLog {
-	return RequestLog{
-		Timestamp: time.Now().UTC().Format(time.RFC3339),
+	req_log := RequestLog{
+		Timestamp: time.Now().UTC().Format(format.DateTimeFormat),
 		Level:     level.ToStr(),
 		Service:   service.ToStr(),
 		Event:     event.ToStr(),
 		Message:   message,
 	}
+
+	req_log.Request.ID = uuid.New().String()
+
+	return req_log
 }
 
 func (rl RequestLog) ToText() string {
 	return fmt.Sprintf(
-		"[%s][%s][%s] %s -> \"%s %s%s\" %d %dB %dms: %s",
+		"[%s][%s][%s] %s -> \"%s %s%s\" %d %dB %dms: %s\n",
 		rl.Timestamp,
 		rl.Service,
 		rl.Level,
