@@ -5,11 +5,11 @@ import (
 	"dreamproxy/format"
 	"encoding/json"
 	"fmt"
-	_log "log"
 	"os"
 	"time"
 
 	"github.com/google/uuid"
+	_log "log"
 )
 
 const (
@@ -122,6 +122,14 @@ func (rl RequestLogEntry) ToJSON() string {
 	return string(data)
 }
 
+func (rl RequestLogEntry) Log() {
+	Log(LogLevel(rl.Level), rl.ToText())
+}
+
+func (rl RequestLogEntry) LogTo(logpath string) {
+	LogTo(rl.ToText(), logpath)
+}
+
 // ================================ LogEntry =======================================
 
 type LogEntry struct {
@@ -160,9 +168,19 @@ func (rl LogEntry) ToJSON() string {
 }
 
 func (rl LogEntry) Log() {
+	Log(LogLevel(rl.Level), rl.ToText())
+}
+
+func (rl LogEntry) LogTo(logpath string) {
+	LogTo(rl.ToText(), logpath)
+}
+
+// ================================ Utils ================================
+
+func Log(level LogLevel, log string) {
 	var logpath string = ACCESS_LOG_FILE
 
-	if rl.Level == string(ERROR) {
+	if level == ERROR {
 		logpath = ERROR_LOG_FILE
 	}
 
@@ -174,7 +192,7 @@ func (rl LogEntry) Log() {
 	}
 
 	buf_writer := bufio.NewWriter(log_file)
-	written_bytes, err := buf_writer.WriteString(rl.ToText())
+	written_bytes, err := buf_writer.WriteString(log)
 
 	if err != nil {
 		_log.Println(err, " ", written_bytes)
@@ -184,7 +202,7 @@ func (rl LogEntry) Log() {
 	buf_writer.Flush()
 }
 
-func (rl LogEntry) LogTo(logpath string) {
+func LogTo(log string, logpath string) {
 	log_file, err := os.OpenFile(logpath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 
 	if err != nil {
@@ -193,7 +211,7 @@ func (rl LogEntry) LogTo(logpath string) {
 	}
 
 	buf_writer := bufio.NewWriter(log_file)
-	written_bytes, err := buf_writer.WriteString(rl.ToText())
+	written_bytes, err := buf_writer.WriteString(log)
 
 	if err != nil {
 		_log.Println(err, " ", written_bytes)
@@ -202,5 +220,3 @@ func (rl LogEntry) LogTo(logpath string) {
 
 	buf_writer.Flush()
 }
-
-// ================================ ResponseLog =======================================

@@ -8,7 +8,6 @@ import (
 	"strconv"
 )
 
-const LOG_FORMAT string = "text"
 const CONFIG_FILE string = "./Dreamfile"
 
 var dreamconfig config.Config

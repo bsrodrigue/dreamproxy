@@ -1,7 +1,6 @@
 package dream
 
 import (
-	"bufio"
 	"dreamproxy/config"
 	"dreamproxy/format"
 	"dreamproxy/fs"
@@ -13,7 +12,6 @@ import (
 	_log "log"
 	"net"
 	"net/url"
-	"os"
 	"path"
 	"path/filepath"
 	"slices"
@@ -116,24 +114,7 @@ func (session *ClientSession) HandleConnection(server_configs []config.Server) {
 		log.Response.LatencyMS = latency.Milliseconds()
 
 		access_logpath := server_cfg.AccessLog
-		log_file, err := os.OpenFile(access_logpath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-
-		if err != nil {
-			_log.Println(err)
-			continue // Handle this later
-		}
-
-		// Create a log handler
-		buf_writer := bufio.NewWriter(log_file)
-		written_bytes, err := buf_writer.WriteString(log.ToText())
-
-		if err != nil {
-			println(written_bytes)
-			_log.Println(err)
-			continue
-		}
-
-		buf_writer.Flush()
+		log.LogTo(access_logpath)
 
 		// Check keep-alive
 		if strings.ToLower(res.Headers["connection"]) == "close" {
