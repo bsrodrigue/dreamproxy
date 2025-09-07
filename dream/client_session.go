@@ -105,7 +105,7 @@ func (session *ClientSession) HandleConnection(server_configs []config.Server) {
 		latency := time.Since(req_start)
 		connection.Write(res_bytes)
 
-		log := logger.NewRequestLog(logger.DREAM_SERVER, logger.INFO, logger.REQUEST, "")
+		log := logger.NewRequestLogEntry(logger.DREAM_SERVER, logger.INFO, logger.REQUEST, "")
 		log.Request.ClientIP = connection.RemoteAddr().String()
 		log.Request.Method = req.Method
 		log.Request.Path = req.Target

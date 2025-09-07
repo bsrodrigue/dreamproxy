@@ -215,6 +215,7 @@ func IsValidTarget(target string, method string) bool {
 }
 
 func ExtractHeadersAndBodyStart(c net.Conn) ([]byte, []byte, error) {
+	// var client_ip = c.RemoteAddr().String()
 	var req_buf bytes.Buffer
 	var body_buf bytes.Buffer
 	var end_of_headers int = -1
@@ -226,22 +227,19 @@ func ExtractHeadersAndBodyStart(c net.Conn) ([]byte, []byte, error) {
 
 		// EOF
 		if n == 0 {
-			log := logger.NewRequestLog(logger.HTTP_PARSER, logger.ERROR, logger.REQ_READING_ERROR, "Client disconnected before full message")
-			log.Request.ClientIP = c.RemoteAddr().String()
-			fmt.Println(log.ToText())
+			log := logger.NewLogEntry(logger.HTTP_PARSER, logger.ERROR, logger.REQ_READING_ERROR, "Client disconnected before full message")
+			log.Log()
 			return nil, nil, err
 		}
 
 		if err != nil {
 			if errors.Is(err, net.ErrClosed) {
-				log := logger.NewRequestLog(logger.HTTP_PARSER, logger.ERROR, logger.REQ_READING_ERROR, "Client disconnected")
-				log.Request.ClientIP = c.RemoteAddr().String()
-				fmt.Println(log.ToText())
+				log := logger.NewLogEntry(logger.HTTP_PARSER, logger.ERROR, logger.REQ_READING_ERROR, "Client disconnected")
+				log.Log()
 				return nil, nil, err
 			} else {
-				log := logger.NewRequestLog(logger.HTTP_PARSER, logger.ERROR, logger.REQ_READING_ERROR, "Error while reading socket")
-				log.Request.ClientIP = c.RemoteAddr().String()
-				fmt.Println(log.ToText())
+				log := logger.NewLogEntry(logger.HTTP_PARSER, logger.ERROR, logger.REQ_READING_ERROR, "Error while reading socket")
+				log.Log()
 				return nil, nil, err
 			}
 		}
@@ -315,9 +313,8 @@ func ReadFullHttpMessage(c net.Conn) (string, error) {
 		max_body_len, err = strconv.Atoi(content_length)
 
 		if err != nil {
-			log := logger.NewRequestLog(logger.HTTP_PARSER, logger.ERROR, logger.REQ_READING_ERROR, "Error while reading content-length")
-			log.Request.ClientIP = c.RemoteAddr().String()
-			fmt.Println(log.ToText())
+			log := logger.NewLogEntry(logger.HTTP_PARSER, logger.ERROR, logger.REQ_READING_ERROR, "Error while reading content-length")
+			log.Log()
 			return "", err
 		}
 	}
@@ -330,22 +327,19 @@ func ReadFullHttpMessage(c net.Conn) (string, error) {
 
 		// EOF
 		if n == 0 && !keepAlive {
-			log := logger.NewRequestLog(logger.HTTP_PARSER, logger.ERROR, logger.REQ_READING_ERROR, "Client disconnected before full body")
-			log.Request.ClientIP = c.RemoteAddr().String()
-			fmt.Println(log.ToText())
+			log := logger.NewLogEntry(logger.HTTP_PARSER, logger.ERROR, logger.REQ_READING_ERROR, "Client disconnected before full body")
+			log.Log()
 			return "", err
 		}
 
 		if err != nil {
 			if errors.Is(err, net.ErrClosed) {
-				log := logger.NewRequestLog(logger.HTTP_PARSER, logger.ERROR, logger.REQ_READING_ERROR, "Client disconnected")
-				log.Request.ClientIP = c.RemoteAddr().String()
-				fmt.Println(log.ToText())
+				log := logger.NewLogEntry(logger.HTTP_PARSER, logger.ERROR, logger.REQ_READING_ERROR, "Client disconnected")
+				log.Log()
 				return "", err
 			} else {
-				log := logger.NewRequestLog(logger.HTTP_PARSER, logger.ERROR, logger.REQ_READING_ERROR, "Error while reading client socket")
-				log.Request.ClientIP = c.RemoteAddr().String()
-				fmt.Println(log.ToText())
+				log := logger.NewLogEntry(logger.HTTP_PARSER, logger.ERROR, logger.REQ_READING_ERROR, "Error while reading client socket")
+				log.Log()
 				return "", err
 			}
 		}
@@ -357,16 +351,14 @@ func ReadFullHttpMessage(c net.Conn) (string, error) {
 	n, err := req_buf.Write(body_buf.Bytes())
 
 	if n < max_body_len {
-		log := logger.NewRequestLog(logger.HTTP_PARSER, logger.ERROR, logger.REQ_READING_ERROR, "Truncated Body")
-		log.Request.ClientIP = c.RemoteAddr().String()
-		fmt.Println(log.ToText())
+		log := logger.NewLogEntry(logger.HTTP_PARSER, logger.ERROR, logger.REQ_READING_ERROR, "Truncated Body")
+		log.Log()
 		return "", err
 	}
 
 	if err != nil {
-		log := logger.NewRequestLog(logger.HTTP_PARSER, logger.ERROR, logger.REQ_READING_ERROR, "Error while assembling message")
-		log.Request.ClientIP = c.RemoteAddr().String()
-		fmt.Println(log.ToText())
+		log := logger.NewLogEntry(logger.HTTP_PARSER, logger.ERROR, logger.REQ_READING_ERROR, "Error while assembling message")
+		log.Log()
 		return "", err
 	}
 
