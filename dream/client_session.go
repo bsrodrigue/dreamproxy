@@ -160,9 +160,6 @@ func (session *ClientSession) HandleRequest(req *http.HttpReq, server_cfg config
 
 	res.Headers["connection"] = req.Headers["connection"]
 
-	// res.Headers["content-length"] = "0" // By default
-	// res.Status = http.StatusNotFound    // By default
-
 	// Handle OPTIONS * (Asterisk Form)
 	if http.AsteriskForm.MatchString(target) {
 		if req.Method != "OPTIONS" {
@@ -171,9 +168,6 @@ func (session *ClientSession) HandleRequest(req *http.HttpReq, server_cfg config
 		}
 		res.Status = http.StatusOK
 		res.Headers["allow"] = "GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS" // We don't support CONNECT yet, maybe we will never...
-
-		// Maybe it is pointless to set this header when there is no content
-		// res.Headers["content-length"] = "0"
 
 		return res, nil
 	}

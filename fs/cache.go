@@ -1,6 +1,7 @@
 package fs
 
 import (
+	"dreamproxy/contentencoder"
 	"dreamproxy/format"
 	"errors"
 	"fmt"
@@ -134,6 +135,8 @@ func (fcache *StaticFileCache) Get(key string) ([]byte, error) {
 		}
 
 		data = body
+
+		contentencoder.EncodeGzip(data)
 	}
 
 	return data, nil
