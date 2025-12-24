@@ -43,7 +43,7 @@ The current focus areas are:
 ### Build
 
 ```bash
-git clone https://github.com/yourname/dreamserver
+git clone https://github.com/bsrodrigue/dreamproxy.git
 cd dreamserver
 go build -o dreamserver
 ```
