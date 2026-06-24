@@ -1,35 +1,38 @@
 package http
 
 import (
-	"dreamproxy/format"
 	"strconv"
 	"strings"
 	"time"
+
+	"dreamproxy/format"
 )
 
-type HttpVersion string
+type HTTPVersion string
 
 const (
-	V0_9 HttpVersion = "0.9"
-	V1_0 HttpVersion = "1.0"
-	V1_1 HttpVersion = "1.1"
-	V2_0 HttpVersion = "2.0"
-	V3_0 HttpVersion = "3.0"
+	V0_9 HTTPVersion = "0.9"
+	V1_0 HTTPVersion = "1.0"
+	V1_1 HTTPVersion = "1.1"
+	V2_0 HTTPVersion = "2.0"
+	V3_0 HTTPVersion = "3.0"
 )
 
-var HTTP_METHODS = []string{
+var HTTPMethods = []string{
+	// Regular verbs
 	"GET",
 	"HEAD",
 	"OPTIONS",
-	"TRACE",
 	"DELETE",
 	"PUT",
 	"POST",
 	"PATCH",
-	"CONNECT",
+
+	"TRACE",   // Echoes back request
+	"CONNECT", // Used for proxies
 }
 
-type HttpReq struct {
+type HTTPReq struct {
 	// Request Line Informations
 	Scheme  string
 	Method  string
@@ -43,7 +46,7 @@ type HttpReq struct {
 	Body []byte
 }
 
-func (req *HttpReq) ToStr() string {
+func (req *HTTPReq) ToStr() string {
 	var sb strings.Builder
 
 	// Pre-allocate roughly enough space
@@ -74,13 +77,13 @@ func (req *HttpReq) ToStr() string {
 	return sb.String()
 }
 
-func (req *HttpReq) ToBytes() []byte {
+func (req *HTTPReq) ToBytes() []byte {
 	return []byte(req.ToStr())
 }
 
 type HttpRes struct {
 	// Status Line Informations
-	Version HttpVersion
+	Version HTTPVersion
 	Status  StatusCode
 
 	// Response Headers
@@ -105,7 +108,6 @@ func (res *HttpRes) SetServerHeaders() {
 }
 
 func (res *HttpRes) SetReverseProxyHeaders() {
-
 }
 
 func (res *HttpRes) ToBytes() []byte {

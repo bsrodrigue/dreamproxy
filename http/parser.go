@@ -2,7 +2,6 @@ package http
 
 import (
 	"bytes"
-	"dreamproxy/logger"
 	"errors"
 	"fmt"
 	"log"
@@ -11,6 +10,8 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+
+	"dreamproxy/logger"
 )
 
 // HTTP Request Format
@@ -20,7 +21,7 @@ import (
 // <header>:<value>\r\n\r\n
 // <body>
 
-func ParseRawHttpReq(raw_http string) (*HttpReq, error) {
+func ParseRawHttpReq(raw_http string) (*HTTPReq, error) {
 	portions := strings.SplitN(raw_http, "\r\n", 2)
 
 	if len(portions) != 2 {
@@ -48,7 +49,7 @@ func ParseRawHttpReq(raw_http string) (*HttpReq, error) {
 	raw_target := strings.TrimSpace(request_line_parts[1])
 	raw_version := strings.TrimSpace(request_line_parts[2])
 
-	if !slices.Contains(HTTP_METHODS, raw_method) {
+	if !slices.Contains(HTTPMethods, raw_method) {
 		return nil, fmt.Errorf("invalid HTTP method")
 	}
 
@@ -84,7 +85,7 @@ func ParseRawHttpReq(raw_http string) (*HttpReq, error) {
 		raw_body = rest[1]
 	}
 
-	return &HttpReq{
+	return &HTTPReq{
 		Scheme:  "http",
 		Method:  raw_method,
 		Target:  raw_target,
@@ -102,7 +103,6 @@ func ParseRawHttpReq(raw_http string) (*HttpReq, error) {
 // <body>
 
 func ParseRawHttpRes(raw_http string) (*HttpRes, error) {
-
 	portions := strings.SplitN(raw_http, "\r\n", 2)
 
 	if len(portions) != 2 {
@@ -163,7 +163,7 @@ func ParseRawHttpRes(raw_http string) (*HttpRes, error) {
 
 	return &HttpRes{
 		Status:  StatusCode(status_code),
-		Version: HttpVersion(version_number),
+		Version: HTTPVersion(version_number),
 		Headers: headers,
 		Body:    []byte(raw_body),
 	}, nil
@@ -245,7 +245,6 @@ func ExtractHeadersAndBodyStart(c net.Conn) ([]byte, []byte, error) {
 		}
 
 		_, err = req_buf.Write(tmp_buf[:n])
-
 		if err != nil {
 			log.Println(err)
 		}
@@ -284,7 +283,6 @@ func ReadFullHttpMessage(c net.Conn) (string, error) {
 	var keepAlive bool = false
 
 	req_bytes, body_bytes, err := ExtractHeadersAndBodyStart(c)
-
 	if err != nil {
 		return "", err
 	}
@@ -311,7 +309,6 @@ func ReadFullHttpMessage(c net.Conn) (string, error) {
 		max_body_len = 0
 	} else {
 		max_body_len, err = strconv.Atoi(content_length)
-
 		if err != nil {
 			log := logger.NewLogEntry(logger.HTTP_PARSER, logger.ERROR, logger.REQ_READING_ERROR, "Error while reading content-length")
 			log.Log()

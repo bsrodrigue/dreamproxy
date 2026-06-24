@@ -1,12 +1,6 @@
 package dream
 
 import (
-	"dreamproxy/config"
-	"dreamproxy/format"
-	"dreamproxy/fs"
-	"dreamproxy/http"
-	"dreamproxy/logger"
-	"dreamproxy/mime"
 	"errors"
 	"fmt"
 	_log "log"
@@ -18,6 +12,13 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"dreamproxy/config"
+	"dreamproxy/format"
+	"dreamproxy/fs"
+	"dreamproxy/http"
+	"dreamproxy/logger"
+	"dreamproxy/mime"
 )
 
 type ClientSession struct {
@@ -57,7 +58,6 @@ func (session *ClientSession) HandleConnection(server_configs []config.Server) {
 	for {
 		req_start := time.Now()
 		req_raw, err := http.ReadFullHttpMessage(connection)
-
 		if err != nil {
 			res := http.NewFailedToParseRes(connection.RemoteAddr().String(), err.Error())
 
@@ -68,7 +68,6 @@ func (session *ClientSession) HandleConnection(server_configs []config.Server) {
 		}
 
 		req, err := http.ParseRawHttpReq(req_raw)
-
 		if err != nil {
 			res := http.NewFailedToParseRes(connection.RemoteAddr().String(), err.Error())
 			res.Version = http.V1_1
@@ -87,7 +86,6 @@ func (session *ClientSession) HandleConnection(server_configs []config.Server) {
 		}
 
 		res, err := session.HandleRequest(req, server_cfg)
-
 		if err != nil {
 			res := http.NewBadRequestRes(*req, connection.RemoteAddr().String(), err)
 			connection.Write([]byte(res.ToStr()))
@@ -125,7 +123,7 @@ func (session *ClientSession) HandleConnection(server_configs []config.Server) {
 
 // TODO: Consider caching
 func FindServerConfig(host string, server_configs []config.Server) (config.Server, bool) {
-	var ok = false
+	ok := false
 	var config config.Server = config.Server{}
 
 	for _, cfg := range server_configs {
@@ -142,7 +140,7 @@ func FindServerConfig(host string, server_configs []config.Server) (config.Serve
 	return config, ok
 }
 
-func (session *ClientSession) HandleRequest(req *http.HttpReq, server_cfg config.Server) (*http.HttpRes, error) {
+func (session *ClientSession) HandleRequest(req *http.HTTPReq, server_cfg config.Server) (*http.HttpRes, error) {
 	var res *http.HttpRes
 	var req_url *url.URL
 	var err error
@@ -227,7 +225,6 @@ func (session *ClientSession) HandleRequest(req *http.HttpReq, server_cfg config
 				Headers: req.Headers,
 				Body:    req.Body,
 			})
-
 			if err != nil {
 				return nil, err
 			}
@@ -239,13 +236,11 @@ func (session *ClientSession) HandleRequest(req *http.HttpReq, server_cfg config
 					Headers: req.Headers,
 					Body:    req.Body,
 				})
-
 				if err != nil {
 					return nil, err
 				}
 			}
 		} else {
-
 			// Static File Server
 			switch method {
 			case "HEAD":
@@ -289,13 +284,12 @@ func handleHead(target_url string, res *http.HttpRes, root_fs string) error {
 	return err
 }
 
-func handleGet(target_url string, req http.HttpReq, res *http.HttpRes, root_fs string) error {
+func handleGet(target_url string, req http.HTTPReq, res *http.HttpRes, root_fs string) error {
 	var res_body []byte
 	var err error
 	res.Status = http.StatusOK
 
 	file_path, stat, err := fs.ResolveFilePath(target_url, root_fs)
-
 	if err != nil {
 		res.Status = http.StatusNotFound
 		res.Body = make([]byte, 0)
@@ -321,7 +315,6 @@ func handleGet(target_url string, req http.HttpReq, res *http.HttpRes, root_fs s
 	res_body, err = fs.GlobalStaticFileCache.Get(file_path)
 
 	res.Headers["expires"], err = fs.GlobalStaticFileCache.GetExpirationDateTime(file_path)
-
 	if err != nil {
 		res.Headers["expires"] = ""
 	}
@@ -337,7 +330,6 @@ func handleGet(target_url string, req http.HttpReq, res *http.HttpRes, root_fs s
 
 		lower_bound, err := strconv.Atoi(bounds[0])
 		upper_bound, err := strconv.Atoi(bounds[1])
-
 		if err != nil {
 			return err
 		}

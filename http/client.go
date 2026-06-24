@@ -48,7 +48,7 @@ func PreprocessCfg(cfg RequestConfig, host string, path string) RequestConfig {
 	return cfg
 }
 
-func HandleRequest(req HttpReq, host string, port int) (*HttpRes, error) {
+func HandleRequest(req HTTPReq, host string, port int) (*HttpRes, error) {
 	connection, err := net.Dial("tcp4", net.JoinHostPort(host, fmt.Sprint(port)))
 
 	defer connection.Close()
@@ -76,13 +76,11 @@ func HandleRequest(req HttpReq, host string, port int) (*HttpRes, error) {
 	}
 
 	res_str, err := ReadFullHttpMessage(connection)
-
 	if err != nil {
 		return nil, err
 	}
 
 	res, err := ParseRawHttpRes(res_str)
-
 	if err != nil {
 		return nil, err
 	}
@@ -93,7 +91,7 @@ func HandleRequest(req HttpReq, host string, port int) (*HttpRes, error) {
 func MakeRequest(method string, host string, port int, path string, cfg RequestConfig) (*HttpRes, error) {
 	cfg = PreprocessCfg(cfg, host, path)
 
-	req := HttpReq{
+	req := HTTPReq{
 		Version: string(V1_1), // Make configurable
 		Method:  strings.ToUpper(method),
 		Scheme:  "http",
