@@ -1,3 +1,4 @@
+// Package http
 package http
 
 import (
@@ -84,7 +85,7 @@ func (req *HTTPReq) ToBytes() []byte {
 	return []byte(req.ToStr())
 }
 
-type HttpRes struct {
+type HTTPRes struct {
 	// Status Line Informations
 	Version HTTPVersion
 	Status  StatusCode
@@ -96,14 +97,14 @@ type HttpRes struct {
 	Body []byte
 }
 
-func CreateHttpRes() *HttpRes {
-	return &HttpRes{
+func CreateHTTPRes() *HTTPRes {
+	return &HTTPRes{
 		Version: V1_1,
 		Headers: multidict.NewMultiDict(),
 	}
 }
 
-func (res *HttpRes) SetServerHeaders() {
+func (res *HTTPRes) SetServerHeaders() {
 	now := time.Now().UTC() // Make this configurable
 
 	res.Headers.Set("server", "dreamserver/0.0.1 (Archlinux)")
@@ -111,14 +112,14 @@ func (res *HttpRes) SetServerHeaders() {
 	res.Headers.Set("date", format.TimeToGMT(now))
 }
 
-func (res *HttpRes) SetReverseProxyHeaders() {
+func (res *HTTPRes) SetReverseProxyHeaders() {
 }
 
-func (res *HttpRes) ToBytes() []byte {
+func (res *HTTPRes) ToBytes() []byte {
 	return []byte(res.ToStr())
 }
 
-func (res *HttpRes) ToStr() string {
+func (res *HTTPRes) ToStr() string {
 	var sb strings.Builder
 
 	// Pre-allocate roughly enough space
@@ -188,7 +189,7 @@ const (
 	StatusServiceUnavailable  StatusCode = 503
 )
 
-// statusText maps HTTP status codes to their messages.
+// StatusText maps HTTP status codes to their messages.
 var StatusText = map[StatusCode]string{
 	StatusOK:                  "OK",
 	StatusCreated:             "Created",
@@ -210,7 +211,7 @@ var StatusText = map[StatusCode]string{
 	StatusServiceUnavailable:  "Service Unavailable",
 }
 
-// Text returns the standard text for the HTTP status code.
+// ToStr returns the standard text for the HTTP status code.
 func (c StatusCode) ToStr() string {
 	if msg, ok := StatusText[c]; ok {
 		return msg

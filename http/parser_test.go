@@ -12,7 +12,7 @@ func TestParseRawHttp(t *testing.T) {
 		name      string
 		raw       string
 		wantErr   bool
-		checkFunc func(req *HTTPReq, res *HttpRes) // only one of req or res will be non-nil
+		checkFunc func(req *HTTPReq, res *HTTPRes) // only one of req or res will be non-nil
 		isReq     bool
 	}{
 		// ==== Request Line ====
@@ -32,7 +32,7 @@ func TestParseRawHttp(t *testing.T) {
 			name:  "Extra spaces in request line",
 			raw:   "GET   /   HTTP/1.1\r\nHost: example.com\r\n\r\n",
 			isReq: true,
-			checkFunc: func(req *HTTPReq, _ *HttpRes) {
+			checkFunc: func(req *HTTPReq, _ *HTTPRes) {
 				if req.Method != "GET" || req.Target != "/" || req.Version != "1.1" {
 					t.Errorf("Failed to parse request line with extra spaces")
 				}
@@ -42,7 +42,7 @@ func TestParseRawHttp(t *testing.T) {
 			name:  "Absolute-form target",
 			raw:   "GET http://example.com/path HTTP/1.1\r\n\r\n",
 			isReq: true,
-			checkFunc: func(req *HTTPReq, _ *HttpRes) {
+			checkFunc: func(req *HTTPReq, _ *HTTPRes) {
 				if req.Target != "http://example.com/path" {
 					t.Errorf("Failed to parse absolute-form target")
 				}
@@ -52,7 +52,7 @@ func TestParseRawHttp(t *testing.T) {
 			name:  "Asterisk-form target",
 			raw:   "OPTIONS * HTTP/1.1\r\n\r\n",
 			isReq: true,
-			checkFunc: func(req *HTTPReq, _ *HttpRes) {
+			checkFunc: func(req *HTTPReq, _ *HTTPRes) {
 				if req.Target != "*" {
 					t.Errorf("Failed to parse asterisk-form target")
 				}
@@ -62,7 +62,7 @@ func TestParseRawHttp(t *testing.T) {
 			name:  "Authority-form target",
 			raw:   "CONNECT example.com:443 HTTP/1.1\r\n\r\n",
 			isReq: true,
-			checkFunc: func(req *HTTPReq, _ *HttpRes) {
+			checkFunc: func(req *HTTPReq, _ *HTTPRes) {
 				if req.Target != "example.com:443" {
 					t.Errorf("Failed to parse authority-form target")
 				}
@@ -79,7 +79,7 @@ func TestParseRawHttp(t *testing.T) {
 			name:  "Header with multiple colons",
 			raw:   "GET / HTTP/1.1\r\nAuth: user:pass\r\n\r\n",
 			isReq: true,
-			checkFunc: func(req *HTTPReq, _ *HttpRes) {
+			checkFunc: func(req *HTTPReq, _ *HTTPRes) {
 				if req.Headers.GetOne("auth") != "user:pass" {
 					t.Errorf("Failed to parse header with multiple colons")
 				}
@@ -89,7 +89,7 @@ func TestParseRawHttp(t *testing.T) {
 			name:  "Header extra whitespace",
 			raw:   "GET / HTTP/1.1\r\nHost:   example.com   \r\n\r\n",
 			isReq: true,
-			checkFunc: func(req *HTTPReq, _ *HttpRes) {
+			checkFunc: func(req *HTTPReq, _ *HTTPRes) {
 				if req.Headers.GetOne("host") != "example.com" {
 					t.Errorf("Failed to trim header whitespace")
 				}
@@ -100,7 +100,7 @@ func TestParseRawHttp(t *testing.T) {
 			name:  "Request with body",
 			raw:   "POST /submit HTTP/1.1\r\nContent-Length: 29\r\n\r\nfield1=value1&field2=value2",
 			isReq: true,
-			checkFunc: func(req *HTTPReq, _ *HttpRes) {
+			checkFunc: func(req *HTTPReq, _ *HTTPRes) {
 				if string(req.Body) != "field1=value1&field2=value2" {
 					t.Errorf("Body parsing failed")
 				}
@@ -117,7 +117,7 @@ func TestParseRawHttp(t *testing.T) {
 			name:  "Res with body",
 			raw:   "HTTP/1.1 200 OK\r\nContent-Length: 14\r\n\r\n<html>OK</html>",
 			isReq: false,
-			checkFunc: func(_ *HTTPReq, res *HttpRes) {
+			checkFunc: func(_ *HTTPReq, res *HTTPRes) {
 				if string(res.Body) != "<html>OK</html>" {
 					t.Errorf("Res body not parsed correctly")
 				}
@@ -127,7 +127,7 @@ func TestParseRawHttp(t *testing.T) {
 			name:  "Malformed response header",
 			raw:   "HTTP/1.1 200 OK\r\nContent-Type text/html\r\n\r\n",
 			isReq: false,
-			checkFunc: func(_ *HTTPReq, res *HttpRes) {
+			checkFunc: func(_ *HTTPReq, res *HTTPRes) {
 				if res.Headers.Len() != 0 {
 					t.Errorf("Malformed headers should be ignored")
 				}
@@ -299,11 +299,11 @@ func TestHttpReq_ToStr(t *testing.T) {
 func TestHttpRes_ToStr(t *testing.T) {
 	tests := []struct {
 		name string
-		res  HttpRes
+		res  HTTPRes
 	}{
 		{
 			name: "200 OK with body",
-			res: HttpRes{
+			res: HTTPRes{
 				Version: V1_1,
 				Status:  StatusOK,
 				Headers: func() multidict.MultiDict {
@@ -317,7 +317,7 @@ func TestHttpRes_ToStr(t *testing.T) {
 		},
 		{
 			name: "404 Not Found no body",
-			res: HttpRes{
+			res: HTTPRes{
 				Version: V1_1,
 				Status:  StatusNotFound,
 				Headers: multidict.NewMultiDict(),

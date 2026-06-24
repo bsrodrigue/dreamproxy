@@ -141,9 +141,9 @@ func FindServerConfig(host string, server_configs []config.Server) (config.Serve
 	return config, ok
 }
 
-func (session *ClientSession) HandleRequest(req *http.HTTPReq, server_cfg config.Server) (*http.HttpRes, error) {
-	var res *http.HttpRes
-	var req_url *url.URL
+func (session *ClientSession) HandleRequest(req *http.HTTPReq, serverCfg config.Server) (*http.HTTPRes, error) {
+	var res *http.HTTPRes
+	var reqURL *url.URL
 	var err error
 
 	target := req.Target
@@ -152,7 +152,7 @@ func (session *ClientSession) HandleRequest(req *http.HTTPReq, server_cfg config
 	method := req.Method
 
 	// Prepare Response
-	res = &http.HttpRes{
+	res = &http.HTTPRes{
 		Version: http.V1_1,
 		Headers: multidict.NewMultiDict(),
 	}
@@ -192,12 +192,12 @@ func (session *ClientSession) HandleRequest(req *http.HTTPReq, server_cfg config
 
 	// Handle Absolute Form
 	if http.AbsoluteForm.MatchString(target) {
-		req_url, err = url.Parse(target)
+		reqURL, err = url.Parse(target)
 	}
 
 	// Handle Origin Form
 	if http.OriginForm.MatchString(target) {
-		req_url, err = url.Parse(scheme + "://" + host + target)
+		reqURL, err = url.Parse(scheme + "://" + host + target)
 	}
 
 	if err != nil {
@@ -206,23 +206,23 @@ func (session *ClientSession) HandleRequest(req *http.HTTPReq, server_cfg config
 		return nil, err
 	}
 
-	req_url.Path = path.Clean(req_url.Path)
+	reqURL.Path = path.Clean(reqURL.Path)
 
 	// Check if port is part of host
 	if strings.Contains(host, ":") {
 		host = strings.SplitN(host, ":", 2)[0]
 	}
 
-	for _, location := range server_cfg.Locations {
+	for _, location := range serverCfg.Locations {
 
 		// Does not support globbing yet
-		if !strings.HasPrefix(req_url.Path, path.Clean(location.Path)) {
+		if !strings.HasPrefix(reqURL.Path, path.Clean(location.Path)) {
 			continue
 		}
 
 		// Check if Proxy
 		if location.ProxyPass != "" {
-			res, err = http.MakeRequest(req.Method, location.OriginHost, location.OriginPortInt, req_url.Path, http.RequestConfig{
+			res, err = http.MakeRequest(req.Method, location.OriginHost, location.OriginPortInt, reqURL.Path, http.RequestConfig{
 				Headers: req.Headers,
 				Body:    req.Body,
 			})
@@ -245,10 +245,10 @@ func (session *ClientSession) HandleRequest(req *http.HTTPReq, server_cfg config
 			// Static File Server
 			switch method {
 			case "HEAD":
-				handleHead(req_url.Path, res, location.Root)
+				handleHead(reqURL.Path, res, location.Root)
 				break
 			case "GET":
-				handleGet(req_url.Path, *req, res, location.Root)
+				handleGet(reqURL.Path, *req, res, location.Root)
 				break
 			default:
 				// Method not allowed
@@ -261,7 +261,7 @@ func (session *ClientSession) HandleRequest(req *http.HTTPReq, server_cfg config
 	return res, nil
 }
 
-func handleHead(target_url string, res *http.HttpRes, root_fs string) error {
+func handleHead(target_url string, res *http.HTTPRes, root_fs string) error {
 	file_path, stat, err := fs.ResolveFilePath(target_url, root_fs)
 
 	ext := filepath.Ext(file_path)
@@ -285,7 +285,7 @@ func handleHead(target_url string, res *http.HttpRes, root_fs string) error {
 	return err
 }
 
-func handleGet(target_url string, req http.HTTPReq, res *http.HttpRes, root_fs string) error {
+func handleGet(target_url string, req http.HTTPReq, res *http.HTTPRes, root_fs string) error {
 	var res_body []byte
 	var err error
 	res.Status = http.StatusOK

@@ -19,14 +19,14 @@ var MimeTypes = map[string]string{
 	".ttf":   "font/ttf",
 }
 
-func GetContentType(file_path string) string {
-	ext := filepath.Ext(file_path)
+func GetContentType(filePath string) string {
+	ext := filepath.Ext(filePath)
 
-	content_type := MimeTypes[ext]
+	contentType := MimeTypes[ext]
 
-	if content_type == "" {
-		content_type = "application/octet-stream"
+	if contentType == "" {
+		contentType = "application/octet-stream"
 	}
 
-	return content_type
+	return contentType
 }

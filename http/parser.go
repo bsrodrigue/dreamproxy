@@ -103,7 +103,7 @@ func ParseRawHttpReq(raw_http string) (*HTTPReq, error) {
 // <header>:<value>\r\n\r\n
 // <body>
 
-func ParseRawHttpRes(raw_http string) (*HttpRes, error) {
+func ParseRawHttpRes(raw_http string) (*HTTPRes, error) {
 	portions := strings.SplitN(raw_http, "\r\n", 2)
 
 	if len(portions) != 2 {
@@ -162,7 +162,7 @@ func ParseRawHttpRes(raw_http string) (*HttpRes, error) {
 		raw_body = rest[1]
 	}
 
-	return &HttpRes{
+	return &HTTPRes{
 		Status:  StatusCode(status_code),
 		Version: HTTPVersion(version_number),
 		Headers: headers,
