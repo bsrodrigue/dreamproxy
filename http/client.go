@@ -4,21 +4,19 @@ import (
 	"fmt"
 	"net"
 	"strings"
+
+	"dreamproxy/multidict"
 )
 
 type RequestConfig struct {
 	Query   map[string]string
-	Headers map[string]string
+	Headers multidict.MultiDict
 	Body    []byte
 }
 
 func PreprocessCfg(cfg RequestConfig, host string, path string) RequestConfig {
-	if cfg.Headers == nil {
-		cfg.Headers = make(map[string]string)
-	}
-
-	if cfg.Headers["host"] == "" {
-		cfg.Headers["host"] = host
+	if cfg.Headers.GetOne("host") == "" {
+		cfg.Headers.Set("host", host)
 	}
 
 	if strings.HasSuffix(path, "/") {

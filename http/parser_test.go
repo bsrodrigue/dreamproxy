@@ -3,6 +3,8 @@ package http
 import (
 	"strings"
 	"testing"
+
+	"dreamproxy/multidict"
 )
 
 func TestParseRawHttp(t *testing.T) {
@@ -78,7 +80,7 @@ func TestParseRawHttp(t *testing.T) {
 			raw:   "GET / HTTP/1.1\r\nAuth: user:pass\r\n\r\n",
 			isReq: true,
 			checkFunc: func(req *HTTPReq, _ *HttpRes) {
-				if req.Headers["auth"] != "user:pass" {
+				if req.Headers.GetOne("auth") != "user:pass" {
 					t.Errorf("Failed to parse header with multiple colons")
 				}
 			},
@@ -88,7 +90,7 @@ func TestParseRawHttp(t *testing.T) {
 			raw:   "GET / HTTP/1.1\r\nHost:   example.com   \r\n\r\n",
 			isReq: true,
 			checkFunc: func(req *HTTPReq, _ *HttpRes) {
-				if req.Headers["host"] != "example.com" {
+				if req.Headers.GetOne("host") != "example.com" {
 					t.Errorf("Failed to trim header whitespace")
 				}
 			},
@@ -126,7 +128,7 @@ func TestParseRawHttp(t *testing.T) {
 			raw:   "HTTP/1.1 200 OK\r\nContent-Type text/html\r\n\r\n",
 			isReq: false,
 			checkFunc: func(_ *HTTPReq, res *HttpRes) {
-				if len(res.Headers) != 0 {
+				if res.Headers.Len() != 0 {
 					t.Errorf("Malformed headers should be ignored")
 				}
 			},
@@ -232,10 +234,14 @@ func TestHttpReq_ToStr(t *testing.T) {
 				Method:  "GET",
 				Target:  "/",
 				Version: "1.1",
-				Headers: map[string]string{"Host": "example.com"},
-				Body:    nil,
+				Headers: func() multidict.MultiDict {
+					h := multidict.NewMultiDict()
+					h.Set("Host", "example.com")
+					return h
+				}(),
+				Body: nil,
 			},
-			expect: "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n\r\n",
+			expect: "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n",
 		},
 		{
 			name: "POST with body",
@@ -243,24 +249,48 @@ func TestHttpReq_ToStr(t *testing.T) {
 				Method:  "POST",
 				Target:  "/submit",
 				Version: "1.1",
-				Headers: map[string]string{
-					"Content-Type":   "application/x-www-form-urlencoded",
-					"Content-Length": "11",
-				},
+				Headers: func() multidict.MultiDict {
+					h := multidict.NewMultiDict()
+					h.Set("Content-Type", "application/x-www-form-urlencoded")
+					h.Set("Content-Length", "11")
+					return h
+				}(),
 				Body: []byte("hello=world"),
 			},
-			expect: "POST /submit HTTP/1.1\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 11\r\n\r\n\r\nhello=world",
+			expect: "POST /submit HTTP/1.1\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 11\r\n\r\nhello=world",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := tt.req.ToStr()
-			if !strings.Contains(got, tt.expect[:len(tt.expect)-len(tt.req.Body)]) {
-				t.Errorf("Request string missing headers or status line.\nGot:\n%s\nWant:\n%s", got, tt.expect)
+
+			lines := strings.Split(got, "\r\n")
+			if len(lines) < 4 {
+				t.Fatalf("Output too short:\n%s", got)
 			}
-			if tt.req.Body != nil && !strings.HasSuffix(got, string(tt.req.Body)) {
-				t.Errorf("Body mismatch.\nGot:\n%s\nWant body:\n%s", got, tt.req.Body)
+
+			expectedStatus := strings.SplitN(tt.expect, "\r\n", 2)[0]
+			if !strings.HasPrefix(got, expectedStatus) {
+				t.Errorf("Status line mismatch.\nGot:  %q\nWant: %q", lines[0], expectedStatus)
+			}
+
+			// Check each header appears somewhere in the output
+			for key, vals := range tt.req.Headers.Map() {
+				for _, val := range vals {
+					headerLine := key + ": " + val
+					if !strings.Contains(got, headerLine) {
+						t.Errorf("Missing header %q in output:\n%s", headerLine, got)
+					}
+				}
+			}
+
+			// Check last line before empty separator is empty (end of headers)
+			// and body follows
+			if tt.req.Body != nil {
+				if !strings.HasSuffix(got, string(tt.req.Body)) {
+					t.Errorf("Body mismatch.\nGot:\n%s\nWant body:\n%s", got, tt.req.Body)
+				}
 			}
 		})
 	}
@@ -276,10 +306,12 @@ func TestHttpRes_ToStr(t *testing.T) {
 			res: HttpRes{
 				Version: V1_1,
 				Status:  StatusOK,
-				Headers: map[string]string{
-					"Content-Type":   "text/plain",
-					"Content-Length": "5",
-				},
+				Headers: func() multidict.MultiDict {
+					h := multidict.NewMultiDict()
+					h.Set("Content-Type", "text/plain")
+					h.Set("Content-Length", "5")
+					return h
+				}(),
 				Body: []byte("hello"),
 			},
 		},
@@ -288,7 +320,7 @@ func TestHttpRes_ToStr(t *testing.T) {
 			res: HttpRes{
 				Version: V1_1,
 				Status:  StatusNotFound,
-				Headers: map[string]string{},
+				Headers: multidict.NewMultiDict(),
 				Body:    nil,
 			},
 		},

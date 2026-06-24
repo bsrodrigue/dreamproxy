@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"dreamproxy/format"
+	"dreamproxy/multidict"
 )
 
 type HTTPVersion string
@@ -40,7 +41,7 @@ type HTTPReq struct {
 	Version string
 
 	// Request Headers
-	Headers map[string]string
+	Headers multidict.MultiDict
 
 	// Request Body
 	Body []byte
@@ -62,11 +63,13 @@ func (req *HTTPReq) ToStr() string {
 	sb.WriteString("\r\n")
 
 	// Headers
-	for key, value := range req.Headers {
-		sb.WriteString(key)
-		sb.WriteString(": ")
-		sb.WriteString(value)
-		sb.WriteString("\r\n")
+	for key, values := range req.Headers.Map() {
+		for _, value := range values {
+			sb.WriteString(key)
+			sb.WriteString(": ")
+			sb.WriteString(value)
+			sb.WriteString("\r\n")
+		}
 	}
 
 	sb.WriteString("\r\n")
@@ -87,7 +90,7 @@ type HttpRes struct {
 	Status  StatusCode
 
 	// Response Headers
-	Headers map[string]string
+	Headers multidict.MultiDict
 
 	// Response Body
 	Body []byte
@@ -96,15 +99,16 @@ type HttpRes struct {
 func CreateHttpRes() *HttpRes {
 	return &HttpRes{
 		Version: V1_1,
-		Headers: make(map[string]string),
+		Headers: multidict.NewMultiDict(),
 	}
 }
 
 func (res *HttpRes) SetServerHeaders() {
 	now := time.Now().UTC() // Make this configurable
-	res.Headers["server"] = "dreamserver/0.0.1 (Archlinux)"
-	res.Headers["Via"] += "HTTP/1.1 dreamserver,"
-	res.Headers["date"] = format.TimeToGMT(now)
+
+	res.Headers.Set("server", "dreamserver/0.0.1 (Archlinux)")
+	res.Headers.Set("Via", "HTTP/1.1 dreamserver")
+	res.Headers.Set("date", format.TimeToGMT(now))
 }
 
 func (res *HttpRes) SetReverseProxyHeaders() {
@@ -130,11 +134,13 @@ func (res *HttpRes) ToStr() string {
 	sb.WriteString("\r\n")
 
 	// Headers
-	for key, value := range res.Headers {
-		sb.WriteString(key)
-		sb.WriteString(": ")
-		sb.WriteString(value)
-		sb.WriteString("\r\n")
+	for key, values := range res.Headers.Map() {
+		for _, value := range values {
+			sb.WriteString(key)
+			sb.WriteString(": ")
+			sb.WriteString(value)
+			sb.WriteString("\r\n")
+		}
 	}
 
 	sb.WriteString("\r\n")

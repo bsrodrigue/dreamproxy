@@ -19,6 +19,7 @@ import (
 	"dreamproxy/http"
 	"dreamproxy/logger"
 	"dreamproxy/mime"
+	"dreamproxy/multidict"
 )
 
 type ClientSession struct {
@@ -77,8 +78,8 @@ func (session *ClientSession) HandleConnection(server_configs []config.Server) {
 		}
 
 		//------------- Request has been successfully parsed by now
-		host := req.Headers["host"]
-		req.Headers["x-forwarded-for"] = connection.RemoteAddr().String()
+		host := req.Headers.GetOne("host")
+		req.Headers.Set("x-forwarded-for", connection.RemoteAddr().String())
 
 		server_cfg, ok := FindServerConfig(host, server_configs) // Find matching server configuration
 		if !ok {
@@ -105,7 +106,7 @@ func (session *ClientSession) HandleConnection(server_configs []config.Server) {
 		log.Request.ClientIP = connection.RemoteAddr().String()
 		log.Request.Method = req.Method
 		log.Request.Path = req.Target
-		log.Request.Host = req.Headers["host"]
+		log.Request.Host = req.Headers.GetOne("host")
 		log.Response.StatusCode = int(res.Status)
 		log.Response.BytesSent = int64(len(res.Body))
 		log.Response.StatusCode = int(res.Status)
@@ -115,7 +116,7 @@ func (session *ClientSession) HandleConnection(server_configs []config.Server) {
 		log.LogTo(access_logpath)
 
 		// Check keep-alive
-		if strings.ToLower(res.Headers["connection"]) == "close" {
+		if strings.ToLower(res.Headers.GetOne("connection")) == "close" {
 			return
 		}
 	}
@@ -146,17 +147,17 @@ func (session *ClientSession) HandleRequest(req *http.HTTPReq, server_cfg config
 	var err error
 
 	target := req.Target
-	host := req.Headers["host"]
+	host := req.Headers.GetOne("host")
 	scheme := req.Scheme
 	method := req.Method
 
 	// Prepare Response
 	res = &http.HttpRes{
 		Version: http.V1_1,
-		Headers: make(map[string]string),
+		Headers: multidict.NewMultiDict(),
 	}
 
-	res.Headers["connection"] = req.Headers["connection"]
+	res.Headers.Set("connection", req.Headers.GetOne("connection"))
 
 	// res.Headers["content-length"] = "0" // By default
 	// res.Status = http.StatusNotFound    // By default
@@ -168,7 +169,7 @@ func (session *ClientSession) HandleRequest(req *http.HTTPReq, server_cfg config
 			return nil, errors.New("* can only be used with OPTIONS method")
 		}
 		res.Status = http.StatusOK
-		res.Headers["allow"] = "GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS" // We don't support CONNECT yet, maybe we will never...
+		res.Headers.Set("allow", "GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS") // We don't support CONNECT yet, maybe we will never...
 
 		// Maybe it is pointless to set this header when there is no content
 		// res.Headers["content-length"] = "0"
@@ -230,7 +231,7 @@ func (session *ClientSession) HandleRequest(req *http.HTTPReq, server_cfg config
 			}
 
 			if res.Status == http.StatusMovedPermanently || res.Status == http.StatusFound {
-				new_url_path := res.Headers["location"]
+				new_url_path := res.Headers.GetOne("location")
 
 				res, err = http.MakeRequest(req.Method, location.OriginHost, location.OriginPortInt, new_url_path, http.RequestConfig{
 					Headers: req.Headers,
@@ -274,11 +275,11 @@ func handleHead(target_url string, res *http.HttpRes, root_fs string) error {
 	if err != nil {
 		_log.Println(err)
 		res.Status = http.StatusNotFound
-		res.Headers["content-length"] = "0"
+		res.Headers.Set("content-length", "0")
 	} else {
 		res.Status = http.StatusOK
-		res.Headers["content-type"] = content_type
-		res.Headers["content-length"] = fmt.Sprint(stat.Size())
+		res.Headers.Set("content-type", content_type)
+		res.Headers.Set("content-length", fmt.Sprint(stat.Size()))
 	}
 
 	return err
@@ -297,15 +298,15 @@ func handleGet(target_url string, req http.HTTPReq, res *http.HttpRes, root_fs s
 	}
 
 	// Set Content-Type
-	res.Headers["content-type"] = mime.GetContentType(file_path)
+	res.Headers.Set("content-type", mime.GetContentType(file_path))
 
-	if_none_match := req.Headers["if-none-match"]
+	if_none_match := req.Headers.GetOne("if-none-match")
 
 	// Generate ETag
-	res.Headers["etag"] = fs.GenerateETag(stat)
-	res.Headers["last-modified"] = format.TimeToGMT(stat.ModTime())
+	res.Headers.Set("etag", fs.GenerateETag(stat))
+	res.Headers.Set("last-modified", format.TimeToGMT(stat.ModTime()))
 
-	if if_none_match == res.Headers["etag"] { // Client-Side Caching
+	if if_none_match == res.Headers.GetOne("etag") { // Client-Side Caching
 		res.Status = http.StatusNotModified
 		res_body = make([]byte, 0)
 		return nil
@@ -314,17 +315,19 @@ func handleGet(target_url string, req http.HTTPReq, res *http.HttpRes, root_fs s
 	// Handle Server Side caching
 	res_body, err = fs.GlobalStaticFileCache.Get(file_path)
 
-	res.Headers["expires"], err = fs.GlobalStaticFileCache.GetExpirationDateTime(file_path)
+	var expires string
+	expires, err = fs.GlobalStaticFileCache.GetExpirationDateTime(file_path)
 	if err != nil {
-		res.Headers["expires"] = ""
+		expires = ""
 	}
+	res.Headers.Set("expires", expires)
 
-	res.Headers["cache-control"] = fs.GenerateCacheControl(file_path)
+	res.Headers.Set("cache-control", fs.GenerateCacheControl(file_path))
 
 	// Handle Range Requests
-	content_range, ok := req.Headers["range"]
+	rangeVals, ok := req.Headers.Get("range")
 	if ok {
-		content_range = strings.SplitN(content_range, "=", 2)[1]
+		content_range := strings.SplitN(rangeVals[0], "=", 2)[1]
 
 		bounds := strings.SplitN(content_range, "-", 2)
 
@@ -342,7 +345,7 @@ func handleGet(target_url string, req http.HTTPReq, res *http.HttpRes, root_fs s
 		return err
 	}
 
-	res.Headers["content-length"] = fmt.Sprint(len(res_body))
+	res.Headers.Set("content-length", fmt.Sprint(len(res_body)))
 	res.Body = res_body
 
 	return nil

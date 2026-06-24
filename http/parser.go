@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"dreamproxy/logger"
+	"dreamproxy/multidict"
 )
 
 // HTTP Request Format
@@ -169,10 +170,10 @@ func ParseRawHttpRes(raw_http string) (*HttpRes, error) {
 	}, nil
 }
 
-func ParseHttpHeaders(raw_headers string) map[string]string {
+func ParseHttpHeaders(raw_headers string) multidict.MultiDict {
 	lines := strings.Split(raw_headers, "\r\n")
 
-	headers := map[string]string{}
+	headers := multidict.NewMultiDict()
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 		if line == "" {
@@ -186,7 +187,7 @@ func ParseHttpHeaders(raw_headers string) map[string]string {
 
 		key := strings.ToLower(strings.TrimSpace(key_val[0]))
 		val := strings.TrimSpace(key_val[1])
-		headers[key] = val
+		headers.Set(key, val)
 	}
 
 	return headers
@@ -302,8 +303,8 @@ func ReadFullHttpMessage(c net.Conn) (string, error) {
 
 	headers := ParseHttpHeaders(header_str)
 
-	content_length := headers["content-length"]
-	keepAlive = strings.ToLower(headers["connection"]) == "keep-alive"
+	content_length := headers.GetOne("content-length")
+	keepAlive = strings.ToLower(headers.GetOne("connection")) == "keep-alive"
 
 	if content_length == "" || content_length == "0" {
 		max_body_len = 0
